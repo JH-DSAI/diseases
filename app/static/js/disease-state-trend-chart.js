@@ -25,11 +25,6 @@ function createDiseaseStateTrendChart(containerId, data, diseaseName, selectedSt
         return;
     }
 
-    // If no states selected, show all states
-    if (selectedStates.length === 0) {
-        selectedStates = data.available_states;
-    }
-
     // Chart dimensions
     const container = document.getElementById(containerId);
     const containerWidth = container.clientWidth;
