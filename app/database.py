@@ -196,6 +196,59 @@ class DiseaseDatabase:
 
         return [{"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0} for row in result]
 
+    def get_disease_stats(self, disease_name: str) -> dict:
+        """Get summary statistics for a specific disease"""
+        if not self._initialized:
+            return {}
+
+        # Total cases
+        total_cases_result = self.conn.execute("""
+            SELECT SUM(count) as total_cases
+            FROM disease_data
+            WHERE disease_name = ?
+        """, [disease_name]).fetchone()
+        total_cases = int(total_cases_result[0]) if total_cases_result[0] else 0
+
+        # Affected states/jurisdictions
+        affected_states_result = self.conn.execute("""
+            SELECT COUNT(DISTINCT state) as affected_states
+            FROM disease_data
+            WHERE disease_name = ?
+        """, [disease_name]).fetchone()
+        affected_states = int(affected_states_result[0]) if affected_states_result[0] else 0
+
+        # Affected counties/regions (using geo_name column)
+        affected_counties_result = self.conn.execute("""
+            SELECT COUNT(DISTINCT geo_name) as affected_counties
+            FROM disease_data
+            WHERE disease_name = ?
+              AND geo_name IS NOT NULL
+              AND geo_name != ''
+        """, [disease_name]).fetchone()
+        affected_counties = int(affected_counties_result[0]) if affected_counties_result[0] else 0
+
+        # Latest 2-week cases (last 14 days from the most recent date)
+        latest_two_week_result = self.conn.execute("""
+            WITH latest_date AS (
+                SELECT MAX(report_period_end) as max_date
+                FROM disease_data
+                WHERE disease_name = ?
+            )
+            SELECT SUM(count) as two_week_cases
+            FROM disease_data
+            WHERE disease_name = ?
+              AND report_period_end >= (SELECT max_date - INTERVAL 14 DAYS FROM latest_date)
+              AND report_period_end <= (SELECT max_date FROM latest_date)
+        """, [disease_name, disease_name]).fetchone()
+        two_week_cases = int(latest_two_week_result[0]) if latest_two_week_result[0] else 0
+
+        return {
+            "total_cases": total_cases,
+            "affected_states": affected_states,
+            "affected_counties": affected_counties,
+            "two_week_cases": two_week_cases
+        }
+
     def get_disease_timeseries_by_state(self, disease_name: str, granularity: str = 'month') -> dict:
         """Get time series data for a disease broken down by state with national total"""
         if not self._initialized:

@@ -14,32 +14,63 @@
 </div>
 
 <!-- Disease Statistics -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <!-- Summary Card -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Overview</h3>
-            <div class="stat-value text-3xl text-primary">-</div>
-            <p class="text-sm text-base-content/70">Total cases</p>
-        </div>
-    </div>
+<div class="mb-8">
+    <div class="stats stats-vertical lg:stats-horizontal shadow w-full"
+         x-data="{ stats: null, loading: true }"
+         x-init="fetch('/api/disease/{{ disease_name }}/stats', {
+                     headers: {
+                         'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                     }
+                 })
+                 .then(r => r.json())
+                 .then(data => {
+                     stats = data;
+                     loading = false;
+                 })
+                 .catch(err => {
+                     console.error('Failed to fetch disease stats:', err);
+                     loading = false;
+                 })">
 
-    <!-- Trend Card -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Recent Trend</h3>
-            <div class="stat-value text-3xl text-secondary">-</div>
-            <p class="text-sm text-base-content/70">Last 30 days</p>
-        </div>
-    </div>
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Total Cases</div>
+                <div class="stat-value text-primary" x-text="stats.total_cases.toLocaleString()">-</div>
+                <div class="stat-desc">All reported cases</div>
+            </div>
+        </template>
 
-    <!-- States Card -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title text-lg">States Affected</h3>
-            <div class="stat-value text-3xl">-</div>
-            <p class="text-sm text-base-content/70">With reported cases</p>
-        </div>
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Affected Counties/Regions</div>
+                <div class="stat-value text-secondary" x-text="stats.affected_counties.toLocaleString()">-</div>
+                <div class="stat-desc">Geographic areas with cases</div>
+            </div>
+        </template>
+
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Affected States/Jurisdictions</div>
+                <div class="stat-value" x-text="stats.affected_states.toLocaleString()">-</div>
+                <div class="stat-desc">States reporting cases</div>
+            </div>
+        </template>
+
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Latest 2-Week Cases</div>
+                <div class="stat-value text-accent" x-text="stats.two_week_cases.toLocaleString()">-</div>
+                <div class="stat-desc">Recent trend</div>
+            </div>
+        </template>
+
+        <template x-if="loading">
+            <div class="stat">
+                <div class="stat-title">Loading...</div>
+                <div class="stat-value"><span class="loading loading-spinner loading-md"></span></div>
+                <div class="stat-desc">Fetching statistics</div>
+            </div>
+        </template>
     </div>
 </div>
 

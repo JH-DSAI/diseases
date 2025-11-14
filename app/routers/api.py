@@ -10,6 +10,7 @@ from app.database import db
 from app.models import (
     DiseaseListItem,
     DiseaseListResponse,
+    DiseaseStatsResponse,
     DiseaseTimeSeriesByStateResponse,
     DiseaseTotalItem,
     HealthResponse,
@@ -152,3 +153,37 @@ async def get_disease_timeseries_by_state(disease_name: str, granularity: str = 
     except Exception as e:
         logger.error(f"Error fetching state timeseries for {disease_name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch state time series data") from e
+
+
+@router.get("/disease/{disease_name}/stats", response_model=DiseaseStatsResponse)
+async def get_disease_stats(disease_name: str):
+    """
+    Get summary statistics for a specific disease.
+
+    Args:
+        disease_name: Name of the disease
+
+    Returns:
+        Disease-specific statistics including total cases, affected regions, and recent trends
+    """
+    try:
+        # Verify disease exists
+        diseases = db.get_diseases()
+        if disease_name not in diseases:
+            raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
+
+        # Get disease stats
+        stats = db.get_disease_stats(disease_name)
+
+        return DiseaseStatsResponse(
+            disease_name=disease_name,
+            total_cases=stats["total_cases"],
+            affected_states=stats["affected_states"],
+            affected_counties=stats["affected_counties"],
+            two_week_cases=stats["two_week_cases"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching stats for {disease_name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch disease statistics") from e

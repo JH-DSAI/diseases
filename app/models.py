@@ -74,6 +74,15 @@ class DiseaseTimeSeriesByStateResponse(BaseModel):
     national: list[StateTimeSeriesDataPoint] = Field(..., description="National total time series data")
 
 
+class DiseaseStatsResponse(BaseModel):
+    """Disease-specific statistics response model"""
+    disease_name: str = Field(..., description="Disease name")
+    total_cases: int = Field(..., description="Total cases for this disease")
+    affected_states: int = Field(..., description="Number of affected states/jurisdictions")
+    affected_counties: int = Field(..., description="Number of affected counties/regions")
+    two_week_cases: int = Field(..., description="Cases in the latest 2-week period")
+
+
 class ErrorResponse(BaseModel):
     """Error response model"""
     detail: str = Field(..., description="Error detail message")
