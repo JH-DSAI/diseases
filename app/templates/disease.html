@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Disease Header -->
+<div class="mb-8">
+    <div class="breadcrumbs text-sm">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li class="capitalize">{{ disease_name }}</li>
+        </ul>
+    </div>
+    <h1 class="text-4xl font-bold capitalize mt-4">{{ disease_name }}</h1>
+    <p class="text-lg text-base-content/70 mt-2">Detailed statistics and visualizations</p>
+</div>
+
+<!-- Disease Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Summary Card -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title text-lg">Overview</h3>
+            <div class="stat-value text-3xl text-primary">-</div>
+            <p class="text-sm text-base-content/70">Total cases</p>
+        </div>
+    </div>
+
+    <!-- Trend Card -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title text-lg">Recent Trend</h3>
+            <div class="stat-value text-3xl text-secondary">-</div>
+            <p class="text-sm text-base-content/70">Last 30 days</p>
+        </div>
+    </div>
+
+    <!-- States Card -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title text-lg">States Affected</h3>
+            <div class="stat-value text-3xl">-</div>
+            <p class="text-sm text-base-content/70">With reported cases</p>
+        </div>
+    </div>
+</div>
+
+<!-- Visualization Placeholders -->
+<div class="space-y-8">
+    <!-- Time Series Chart -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title">Cases Over Time</h3>
+            <div class="h-96 flex items-center justify-center bg-base-200 rounded">
+                <p class="text-base-content/50">Coming soon: D3.js time series chart</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Geographic and Demographic Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Age Distribution -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h3 class="card-title">Age Group Distribution</h3>
+                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
+                    <p class="text-base-content/50">Coming soon: Age distribution bar chart</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Geographic Breakdown -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h3 class="card-title">Geographic Breakdown</h3>
+                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
+                    <p class="text-base-content/50">Coming soon: Regional comparison</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if disease_name == 'meningococcus' %}
+    <!-- Serotype Analysis (Meningococcus only) -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title">Serotype Distribution</h3>
+            <div class="h-64 flex items-center justify-center bg-base-200 rounded">
+                <p class="text-base-content/50">Coming soon: Serotype pie chart</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Back to Home -->
+<div class="mt-8">
+    <a href="/" class="btn btn-outline">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to Home
+    </a>
+</div>
+{% endblock %}

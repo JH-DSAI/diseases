@@ -1,0 +1,21 @@
+# FastAPI and ASGI server
+fastapi[standard]==0.121.0
+uvicorn[standard]==0.34.0
+
+# Templating
+jinja2==3.1.4
+
+# Database and data processing
+duckdb==1.1.3
+pandas==2.2.3
+
+# Authentication
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Environment management
+python-dotenv==1.0.1
+pydantic-settings==2.7.0
+
+# HTTP client for testing
+httpx==0.28.1

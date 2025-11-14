@@ -1,0 +1,165 @@
+"""DuckDB database connection and data loading"""
+
+import logging
+
+import duckdb
+import pandas as pd
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class DiseaseDatabase:
+    """Manages DuckDB connection and disease data loading"""
+
+    def __init__(self):
+        self.conn: duckdb.DuckDBPyConnection | None = None
+        self._initialized = False
+
+    def connect(self) -> duckdb.DuckDBPyConnection:
+        """Establish DuckDB connection"""
+        if self.conn is None:
+            self.conn = duckdb.connect(settings.database_path)
+            logger.info(f"Connected to DuckDB: {settings.database_path}")
+        return self.conn
+
+    def load_csv_files(self) -> None:
+        """Load all CSV files from data directory into DuckDB"""
+        if self._initialized:
+            logger.info("Database already initialized")
+            return
+
+        conn = self.connect()
+        data_dir = settings.data_directory / "data" / "states"
+
+        if not data_dir.exists():
+            logger.warning(f"Data directory not found: {data_dir}")
+            return
+
+        # Find all CSV files
+        csv_files = list(data_dir.rglob("*.csv"))
+        logger.info(f"Found {len(csv_files)} CSV files")
+
+        if not csv_files:
+            logger.warning("No CSV files found to load")
+            return
+
+        # Load each CSV into a temporary list
+        all_data = []
+        for csv_file in csv_files:
+            try:
+                df = pd.read_csv(csv_file)
+                logger.info(f"Loaded {csv_file.name}: {len(df)} rows")
+                all_data.append(df)
+            except Exception as e:
+                logger.error(f"Error loading {csv_file}: {e}")
+
+        if not all_data:
+            logger.error("No data loaded from CSV files")
+            return
+
+        # Combine all DataFrames
+        combined_df = pd.concat(all_data, ignore_index=True)
+
+        # Normalize column names (handle both 'reporting_jurisdiction' and 'state' columns)
+        if 'reporting_jurisdiction' in combined_df.columns and 'state' not in combined_df.columns:
+            combined_df['state'] = combined_df['reporting_jurisdiction']
+        elif 'state' in combined_df.columns and 'reporting_jurisdiction' not in combined_df.columns:
+            combined_df['reporting_jurisdiction'] = combined_df['state']
+
+        # Ensure consistent column order
+        expected_columns = [
+            'report_period_start', 'report_period_end', 'date_type', 'time_unit',
+            'disease_name', 'disease_subtype', 'reporting_jurisdiction', 'state',
+            'geo_name', 'geo_unit', 'age_group', 'confirmation_status', 'outcome', 'count'
+        ]
+
+        # Keep only expected columns that exist
+        available_columns = [col for col in expected_columns if col in combined_df.columns]
+        combined_df = combined_df[available_columns]
+
+        logger.info(f"Combined data: {len(combined_df)} total rows, {len(combined_df.columns)} columns")
+
+        # Create table in DuckDB
+        conn.execute("DROP TABLE IF EXISTS disease_data")
+        conn.register('disease_data_temp', combined_df)
+        conn.execute("""
+            CREATE TABLE disease_data AS
+            SELECT * FROM disease_data_temp
+        """)
+
+        # Create indexes for common queries
+        conn.execute("CREATE INDEX idx_disease_name ON disease_data(disease_name)")
+        conn.execute("CREATE INDEX idx_state ON disease_data(state)")
+        conn.execute("CREATE INDEX idx_report_period ON disease_data(report_period_start)")
+
+        # Unregister temporary view
+        conn.unregister('disease_data_temp')
+
+        row_count = conn.execute("SELECT COUNT(*) FROM disease_data").fetchone()[0]
+        logger.info(f"Created disease_data table with {row_count} rows")
+
+        self._initialized = True
+
+    def get_diseases(self) -> list[str]:
+        """Get list of unique diseases in the database"""
+        if not self._initialized:
+            return []
+
+        result = self.conn.execute("""
+            SELECT DISTINCT disease_name
+            FROM disease_data
+            ORDER BY disease_name
+        """).fetchall()
+
+        return [row[0] for row in result]
+
+    def get_states(self) -> list[str]:
+        """Get list of unique states in the database"""
+        if not self._initialized:
+            return []
+
+        result = self.conn.execute("""
+            SELECT DISTINCT state
+            FROM disease_data
+            ORDER BY state
+        """).fetchall()
+
+        return [row[0] for row in result]
+
+    def get_summary_stats(self) -> dict:
+        """Get summary statistics across all data"""
+        if not self._initialized:
+            return {}
+
+        stats = self.conn.execute("""
+            SELECT
+                COUNT(*) as total_records,
+                COUNT(DISTINCT disease_name) as total_diseases,
+                COUNT(DISTINCT state) as total_states,
+                SUM(count) as total_cases,
+                MIN(report_period_start) as earliest_date,
+                MAX(report_period_end) as latest_date
+            FROM disease_data
+        """).fetchone()
+
+        return {
+            "total_records": stats[0],
+            "total_diseases": stats[1],
+            "total_states": stats[2],
+            "total_cases": stats[3],
+            "earliest_date": stats[4],
+            "latest_date": stats[5]
+        }
+
+    def close(self):
+        """Close database connection"""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            logger.info("Closed DuckDB connection")
+
+
+# Global database instance
+db = DiseaseDatabase()
