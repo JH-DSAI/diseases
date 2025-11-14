@@ -8,6 +8,8 @@ from app.auth import verify_api_key
 from app.config import settings
 from app.database import db
 from app.models import (
+    AgeGroupData,
+    AgeGroupDistributionResponse,
     DiseaseListItem,
     DiseaseListResponse,
     DiseaseStatsResponse,
@@ -187,3 +189,44 @@ async def get_disease_stats(disease_name: str):
     except Exception as e:
         logger.error(f"Error fetching stats for {disease_name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch disease statistics") from e
+
+
+@router.get("/disease/{disease_name}/age-groups", response_model=AgeGroupDistributionResponse)
+async def get_age_group_distribution(disease_name: str):
+    """
+    Get age group distribution by state for a specific disease.
+
+    Args:
+        disease_name: Name of the disease
+
+    Returns:
+        Age group distribution with percentages for each state
+    """
+    try:
+        # Verify disease exists
+        diseases = db.get_diseases()
+        if disease_name not in diseases:
+            raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
+
+        # Get age group distribution
+        data = db.get_age_group_distribution_by_state(disease_name)
+
+        # Convert to proper format
+        states_formatted = {}
+        for state, age_data in data["states"].items():
+            states_formatted[state] = {
+                age_group: AgeGroupData(**values)
+                for age_group, values in age_data.items()
+            }
+
+        return AgeGroupDistributionResponse(
+            disease_name=disease_name,
+            age_groups=data["age_groups"],
+            available_states=data["available_states"],
+            states=states_formatted
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching age group distribution for {disease_name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch age group distribution") from e

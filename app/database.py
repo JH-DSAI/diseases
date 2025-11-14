@@ -249,6 +249,78 @@ class DiseaseDatabase:
             "two_week_cases": two_week_cases
         }
 
+    def get_age_group_distribution_by_state(self, disease_name: str) -> dict:
+        """Get age group distribution by state for a disease"""
+        if not self._initialized:
+            return {"states": {}, "age_groups": []}
+
+        # Get list of states with data for this disease
+        states_query = """
+            SELECT DISTINCT state
+            FROM disease_data
+            WHERE disease_name = ?
+            ORDER BY state
+        """
+        states_result = self.conn.execute(states_query, [disease_name]).fetchall()
+        available_states = [row[0] for row in states_result]
+
+        # Get age group data by state
+        age_group_query = """
+            SELECT
+                state,
+                age_group,
+                SUM(count) as total_cases
+            FROM disease_data
+            WHERE disease_name = ?
+              AND age_group IS NOT NULL
+              AND age_group != ''
+            GROUP BY state, age_group
+            ORDER BY state, age_group
+        """
+        age_group_result = self.conn.execute(age_group_query, [disease_name]).fetchall()
+
+        # Get unique age groups
+        age_groups_query = """
+            SELECT DISTINCT age_group
+            FROM disease_data
+            WHERE disease_name = ?
+              AND age_group IS NOT NULL
+              AND age_group != ''
+            ORDER BY age_group
+        """
+        age_groups_result = self.conn.execute(age_groups_query, [disease_name]).fetchall()
+        age_groups = [row[0] for row in age_groups_result]
+
+        # Group by state and calculate percentages
+        states_data = {}
+        for state in available_states:
+            state_total = 0
+            state_age_counts = {}
+
+            # First pass: get totals
+            for row in age_group_result:
+                if row[0] == state:
+                    state_age_counts[row[1]] = int(row[2]) if row[2] else 0
+                    state_total += state_age_counts[row[1]]
+
+            # Second pass: calculate percentages
+            state_age_percentages = {}
+            for age_group in age_groups:
+                count = state_age_counts.get(age_group, 0)
+                percentage = (count / state_total * 100) if state_total > 0 else 0
+                state_age_percentages[age_group] = {
+                    "count": count,
+                    "percentage": round(percentage, 2)
+                }
+
+            states_data[state] = state_age_percentages
+
+        return {
+            "states": states_data,
+            "age_groups": age_groups,
+            "available_states": available_states
+        }
+
     def get_disease_timeseries_by_state(self, disease_name: str, granularity: str = 'month') -> dict:
         """Get time series data for a disease broken down by state with national total"""
         if not self._initialized:

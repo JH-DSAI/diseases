@@ -75,9 +75,9 @@
 </div>
 
 <!-- Visualization Placeholders -->
-<div class="space-y-8">
+<div class="space-y-8" x-data="diseaseChart">
     <!-- Time Series Chart -->
-    <div class="card bg-base-100 shadow-xl" x-data="diseaseChart">
+    <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <div class="mb-4">
                 <h3 class="card-title">Cases Over Time by State</h3>
@@ -86,14 +86,14 @@
             <!-- State Filter -->
             <div class="mb-4" x-show="chartData !== null">
                 <h4 class="text-sm font-medium mb-3">Select states to display (national total shown by default)</h4>
-                <div class="filter flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-2">
                     <template x-for="state in availableStates" :key="state">
                         <input type="checkbox"
-                               :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm'"
+                               :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
                                :aria-label="state"
                                :value="state"
                                x-model="selectedStates"
-                               @change="renderChart()">
+                               @change="renderTimeSeriesChart()">
                     </template>
                 </div>
             </div>
@@ -113,26 +113,38 @@
         </div>
     </div>
 
-    <!-- Geographic and Demographic Charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Age Distribution -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h3 class="card-title">Age Group Distribution</h3>
-                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
-                    <p class="text-base-content/50">Coming soon: Age distribution bar chart</p>
-                </div>
-            </div>
-        </div>
+    <!-- Age Group Distribution Chart -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title mb-4">Cases by Age Group</h3>
 
-        <!-- Geographic Breakdown -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h3 class="card-title">Geographic Breakdown</h3>
-                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
-                    <p class="text-base-content/50">Coming soon: Regional comparison</p>
+            <!-- State Filter -->
+            <div class="mb-4" x-show="ageGroupData !== null">
+                <h4 class="text-sm font-medium mb-3">Select states to display</h4>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="state in availableStates" :key="state">
+                        <input type="checkbox"
+                               :class="selectedAgeGroupStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
+                               :aria-label="state"
+                               :value="state"
+                               x-model="selectedAgeGroupStates"
+                               @change="renderAgeGroupChart()">
+                    </template>
                 </div>
             </div>
+
+            <!-- Loading State -->
+            <div x-show="ageGroupLoading" class="flex items-center justify-center h-96">
+                <span class="loading loading-spinner loading-lg"></span>
+            </div>
+
+            <!-- Error State -->
+            <div x-show="ageGroupError && !ageGroupLoading" class="alert alert-error">
+                <span x-text="ageGroupError"></span>
+            </div>
+
+            <!-- Chart Container -->
+            <div id="ageGroupChart" class="w-full" x-show="!ageGroupLoading && !ageGroupError" style="min-height: 450px;"></div>
         </div>
     </div>
 
@@ -162,6 +174,7 @@
 
 {% block extra_scripts %}
 <script src="/static/js/disease-state-trend-chart.js"></script>
+<script src="/static/js/age-group-chart.js"></script>
 <script>
     // Register component immediately - Alpine will pick it up when it starts
     if (window.Alpine) {
@@ -175,20 +188,29 @@
     function diseaseChartComponent() {
         return {
             chartData: null,
+            ageGroupData: null,
             selectedStates: [],
+            selectedAgeGroupStates: [],
             availableStates: [],
             loading: true,
             error: null,
+            ageGroupLoading: true,
+            ageGroupError: null,
 
             init() {
                 console.log('Chart component initialized');
                 this.loadData();
+                this.loadAgeGroupData();
             },
 
             async loadData() {
-                console.log('Loading data for {{ disease_name }}');
+                console.log('Loading timeseries data for {{ disease_name }}');
                 try {
-                    const response = await fetch(`/api/timeseries/states/{{ disease_name }}?granularity=month`);
+                    const response = await fetch(`/api/timeseries/states/{{ disease_name }}?granularity=month`, {
+                        headers: {
+                            'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                        }
+                    });
                     console.log('Response status:', response.status);
 
                     if (!response.ok) {
@@ -200,11 +222,12 @@
 
                     this.availableStates = this.chartData.available_states;
                     this.selectedStates = [...this.availableStates];
+                    this.selectedAgeGroupStates = [...this.availableStates];
                     this.loading = false;
 
                     // Wait for Alpine to update the DOM before rendering
                     this.$nextTick(() => {
-                        requestAnimationFrame(() => this.renderChart());
+                        requestAnimationFrame(() => this.renderTimeSeriesChart());
                     });
                 } catch (err) {
                     console.error('Error loading disease data:', err);
@@ -213,8 +236,37 @@
                 }
             },
 
-            renderChart() {
-                console.log('Rendering chart');
+            async loadAgeGroupData() {
+                console.log('Loading age group data for {{ disease_name }}');
+                try {
+                    const response = await fetch(`/api/disease/{{ disease_name }}/age-groups`, {
+                        headers: {
+                            'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                        }
+                    });
+                    console.log('Age group response status:', response.status);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    this.ageGroupData = await response.json();
+                    console.log('Age group data loaded:', this.ageGroupData);
+
+                    this.ageGroupLoading = false;
+
+                    // Wait for Alpine to update the DOM before rendering
+                    this.$nextTick(() => {
+                        requestAnimationFrame(() => this.renderAgeGroupChart());
+                    });
+                } catch (err) {
+                    console.error('Error loading age group data:', err);
+                    this.ageGroupError = 'Failed to load age group data';
+                    this.ageGroupLoading = false;
+                }
+            },
+
+            renderTimeSeriesChart() {
                 if (!this.chartData) {
                     console.warn('No chart data available');
                     return;
@@ -225,6 +277,20 @@
                     this.chartData,
                     '{{ disease_name }}',
                     this.selectedStates
+                );
+            },
+
+            renderAgeGroupChart() {
+                if (!this.ageGroupData) {
+                    console.warn('No age group data available');
+                    return;
+                }
+
+                createAgeGroupChart(
+                    'ageGroupChart',
+                    this.ageGroupData,
+                    '{{ disease_name }}',
+                    this.selectedAgeGroupStates
                 );
             }
         }
