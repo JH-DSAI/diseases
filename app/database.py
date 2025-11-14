@@ -264,7 +264,7 @@ class DiseaseDatabase:
         states_result = self.conn.execute(states_query, [disease_name]).fetchall()
         available_states = [row[0] for row in states_result]
 
-        # Get age group data by state
+        # Get age group data by state (excluding totals)
         age_group_query = """
             SELECT
                 state,
@@ -274,18 +274,20 @@ class DiseaseDatabase:
             WHERE disease_name = ?
               AND age_group IS NOT NULL
               AND age_group != ''
+              AND LOWER(age_group) NOT LIKE '%total%'
             GROUP BY state, age_group
             ORDER BY state, age_group
         """
         age_group_result = self.conn.execute(age_group_query, [disease_name]).fetchall()
 
-        # Get unique age groups
+        # Get unique age groups (excluding totals)
         age_groups_query = """
             SELECT DISTINCT age_group
             FROM disease_data
             WHERE disease_name = ?
               AND age_group IS NOT NULL
               AND age_group != ''
+              AND LOWER(age_group) NOT LIKE '%total%'
             ORDER BY age_group
         """
         age_groups_result = self.conn.execute(age_groups_query, [disease_name]).fetchall()

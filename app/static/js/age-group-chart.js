@@ -1,10 +1,10 @@
 /**
  * Age Group Distribution Chart
- * D3.js grouped bar chart for displaying age group distribution by state
+ * D3.js 100% stacked bar chart for displaying age group distribution by state
  */
 
 /**
- * Create a grouped bar chart showing age group distribution by state
+ * Create a 100% stacked bar chart showing age group distribution by state
  * @param {string} containerId - ID of the container element
  * @param {Object} data - Data object with states, age_groups, and available_states
  * @param {string} diseaseName - Name of the disease
@@ -45,7 +45,7 @@ function createAgeGroupChart(containerId, data, diseaseName, selectedStates = []
     const width = containerWidth - margin.left - margin.right;
     const height = 450 - margin.top - margin.bottom;
 
-    // Prepare data for grouped bar chart
+    // Prepare data in "wide format" for stacking - each row is a state with age group percentages
     const chartData = [];
     statesToShow.forEach(state => {
         if (data.states[state]) {
@@ -65,36 +65,40 @@ function createAgeGroupChart(containerId, data, diseaseName, selectedStates = []
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
+    // List of subgroups (age groups)
+    const subgroups = data.age_groups;
+
+    // List of groups (states)
+    const groups = chartData.map(d => d.state);
+
     // X scale for states
-    const x0 = d3.scaleBand()
-        .domain(chartData.map(d => d.state))
-        .rangeRound([0, width])
-        .paddingInner(0.1);
+    const x = d3.scaleBand()
+        .domain(groups)
+        .range([0, width])
+        .padding(0.2);
 
-    // X scale for age groups within each state
-    const x1 = d3.scaleBand()
-        .domain(data.age_groups)
-        .rangeRound([0, x0.bandwidth()])
-        .padding(0.05);
-
-    // Y scale for percentages
+    // Y scale for percentages (0-100%)
     const y = d3.scaleLinear()
         .domain([0, 100])
-        .nice()
         .range([height, 0]);
 
     // Color scale for age groups
-    const colorScale = d3.scaleOrdinal()
-        .domain(data.age_groups)
+    const color = d3.scaleOrdinal()
+        .domain(subgroups)
         .range([
             '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6',
             '#ec4899', '#06b6d4', '#14b8a6', '#f97316', '#84cc16'
         ]);
 
+    // Stack the data: d3.stack() computes the position of each subgroup on the Y axis
+    const stackedData = d3.stack()
+        .keys(subgroups)
+        (chartData);
+
     // Add X axis (states)
     svg.append("g")
         .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(x0))
+        .call(d3.axisBottom(x))
         .selectAll("text")
         .style("font-size", "10px")
         .attr("transform", "rotate(-45)")
@@ -117,31 +121,21 @@ function createAgeGroupChart(containerId, data, diseaseName, selectedStates = []
         .style("font-weight", "600")
         .text("Percentage of Cases");
 
-    // Add grouped bars
-    const stateGroups = svg.selectAll(".state-group")
-        .data(chartData)
-        .enter()
-        .append("g")
-        .attr("class", "state-group")
-        .attr("transform", d => `translate(${x0(d.state)},0)`);
-
-    stateGroups.selectAll("rect")
-        .data(d => {
-            return data.age_groups.map(ageGroup => {
-                return {
-                    ageGroup: ageGroup,
-                    percentage: d[ageGroup] || 0,
-                    state: d.state
-                };
-            });
-        })
-        .enter()
-        .append("rect")
-        .attr("x", d => x1(d.ageGroup))
-        .attr("y", d => y(d.percentage))
-        .attr("width", x1.bandwidth())
-        .attr("height", d => height - y(d.percentage))
-        .attr("fill", d => colorScale(d.ageGroup))
+    // Show the bars (stacked)
+    svg.append("g")
+        .selectAll("g")
+        // Enter in the stack data = loop key per key = age group per age group
+        .data(stackedData)
+        .enter().append("g")
+        .attr("fill", d => color(d.key))
+        .selectAll("rect")
+        // enter a second time = loop subgroup per subgroup to add all rectangles
+        .data(d => d)
+        .enter().append("rect")
+        .attr("x", d => x(d.data.state))
+        .attr("y", d => y(d[1]))
+        .attr("height", d => y(d[0]) - y(d[1]))
+        .attr("width", x.bandwidth())
         .style("opacity", 0.9);
 
     // Add legend
@@ -150,7 +144,7 @@ function createAgeGroupChart(containerId, data, diseaseName, selectedStates = []
         .attr("transform", `translate(${width + 20}, 0)`);
 
     const legendItems = legend.selectAll(".legend-item")
-        .data(data.age_groups)
+        .data(subgroups)
         .enter()
         .append("g")
         .attr("class", "legend-item")
@@ -161,7 +155,7 @@ function createAgeGroupChart(containerId, data, diseaseName, selectedStates = []
         .attr("y", 0)
         .attr("width", 15)
         .attr("height", 15)
-        .attr("fill", d => colorScale(d));
+        .attr("fill", d => color(d));
 
     legendItems.append("text")
         .attr("x", 20)
@@ -184,11 +178,15 @@ function createAgeGroupChart(containerId, data, diseaseName, selectedStates = []
         .style("z-index", "1000");
 
     // Add tooltip interaction to bars
-    stateGroups.selectAll("rect")
+    svg.selectAll("rect")
         .on("mouseover", function(event, d) {
+            // Get the age group from the parent g element
+            const ageGroup = d3.select(this.parentNode).datum().key;
+            const percentage = d.data[ageGroup];
+
             d3.select(this).style("opacity", 1);
             tooltip.style("visibility", "visible")
-                .html(`<strong>${d.state}</strong><br/>${d.ageGroup}: ${d.percentage.toFixed(1)}%`);
+                .html(`<strong>${d.data.state}</strong><br/>${ageGroup}: ${percentage.toFixed(1)}%`);
         })
         .on("mousemove", function(event) {
             tooltip.style("top", (event.pageY - 10) + "px")
