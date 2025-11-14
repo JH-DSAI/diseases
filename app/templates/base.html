@@ -5,67 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ page_title | default('Disease Dashboard') }}{% endblock %}</title>
 
-    <!-- Tailwind CSS + DaisyUI -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-
-    <!-- HTMX -->
-    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
-
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.0/dist/cdn.min.js"></script>
-
-    <!-- D3.js -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Tailwind CSS v4 + Typography + DaisyUI (Built) -->
+    <link rel="stylesheet" href="/static/dist/main.css">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/custom.css">
+
+    <!-- Vendor Bundle (HTMX, Alpine.js, D3.js) -->
+    <script src="/static/dist/vendor.js"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-base-200">
     <!-- Navbar -->
-    <div class="navbar bg-base-100 shadow-lg">
+    <div class="navbar bg-base-100">
         <div class="navbar-start">
-            <div class="dropdown">
-                <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" />
-                    </svg>
-                </div>
-                <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
-                    {% if diseases %}
-                        <li>
-                            <a>Diseases</a>
-                            <ul class="p-2">
-                                {% for disease in diseases %}
-                                <li><a href="/disease/{{ disease }}">{{ disease | title }}</a></li>
-                                {% endfor %}
-                            </ul>
-                        </li>
-                    {% endif %}
-                </ul>
-            </div>
             <a href="/" class="btn btn-ghost text-xl">JHU Infectious Disease Tracking System</a>
-        </div>
-        <div class="navbar-center hidden lg:flex">
-            <ul class="menu menu-horizontal px-1">
-                {% if diseases %}
-                    <li>
-                        <details>
-                            <summary>Diseases</summary>
-                            <ul class="p-2 z-[1] bg-base-100">
-                                {% for disease in diseases %}
-                                <li><a href="/disease/{{ disease }}">{{ disease | title }}</a></li>
-                                {% endfor %}
-                            </ul>
-                        </details>
-                    </li>
-                {% endif %}
-            </ul>
-        </div>
-        <div class="navbar-end">
-            <a href="/api/docs" class="btn btn-ghost btn-sm">API Docs</a>
         </div>
     </div>
 
@@ -88,7 +43,7 @@
         <aside>
             <p class="font-bold">US Disease Tracker Dashboard</p>
             <p>Data visualization and analysis tool for disease surveillance</p>
-            <p>Version 0.1.0</p>
+            <p>Version 0.1.0 • <a href="/docs" class="link link-primary">API</a></p>
         </aside>
     </footer>
 

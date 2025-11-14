@@ -196,6 +196,68 @@ class DiseaseDatabase:
 
         return [{"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0} for row in result]
 
+    def get_disease_timeseries_by_state(self, disease_name: str, granularity: str = 'month') -> dict:
+        """Get time series data for a disease broken down by state with national total"""
+        if not self._initialized:
+            return {"states": [], "national": [], "available_states": []}
+
+        # Validate granularity (must be literal for DATE_TRUNC)
+        if granularity not in ['month', 'week']:
+            granularity = 'month'
+
+        # Get list of states with data for this disease
+        states_query = """
+            SELECT DISTINCT state
+            FROM disease_data
+            WHERE disease_name = ?
+            ORDER BY state
+        """
+        states_result = self.conn.execute(states_query, [disease_name]).fetchall()
+        available_states = [row[0] for row in states_result]
+
+        # Get state-level time series
+        state_query = f"""
+            SELECT
+                state,
+                DATE_TRUNC('{granularity}', report_period_start) as period,
+                SUM(count) as total_cases
+            FROM disease_data
+            WHERE disease_name = ?
+            GROUP BY state, DATE_TRUNC('{granularity}', report_period_start)
+            ORDER BY state, period ASC
+        """
+        state_result = self.conn.execute(state_query, [disease_name]).fetchall()
+
+        # Group by state
+        states_data = {}
+        for row in state_result:
+            state, period, cases = row
+            if state not in states_data:
+                states_data[state] = []
+            states_data[state].append({
+                "period": str(period),
+                "cases": int(cases) if cases else 0
+            })
+
+        # Get national total (same as get_national_disease_timeseries)
+        national_query = f"""
+            SELECT
+                DATE_TRUNC('{granularity}', report_period_start) as period,
+                SUM(count) as total_cases
+            FROM disease_data
+            WHERE disease_name = ?
+            GROUP BY DATE_TRUNC('{granularity}', report_period_start)
+            ORDER BY period ASC
+        """
+        national_result = self.conn.execute(national_query, [disease_name]).fetchall()
+        national_data = [{"period": str(row[0]), "cases": int(row[1]) if row[1] else 0} for row in national_result]
+
+        return {
+            "states": states_data,
+            "national": national_data,
+            "available_states": available_states
+        }
+
     def close(self):
         """Close database connection"""
         if self.conn:

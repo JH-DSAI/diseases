@@ -46,12 +46,53 @@
 <!-- Visualization Placeholders -->
 <div class="space-y-8">
     <!-- Time Series Chart -->
-    <div class="card bg-base-100 shadow-xl">
+    <div class="card bg-base-100 shadow-xl" x-data="diseaseChart">
         <div class="card-body">
-            <h3 class="card-title">Cases Over Time</h3>
-            <div class="h-96 flex items-center justify-center bg-base-200 rounded">
-                <p class="text-base-content/50">Coming soon: D3.js time series chart</p>
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="card-title">Cases Over Time by State</h3>
+                <div class="flex gap-2">
+                    <button @click="selectAll()" class="btn btn-sm btn-outline">Select All</button>
+                    <button @click="deselectAll()" class="btn btn-sm btn-outline">Deselect All</button>
+                </div>
             </div>
+
+            <!-- State Filter -->
+            <div class="mb-4" x-show="chartData !== null">
+                <details class="collapse collapse-arrow bg-base-200">
+                    <summary class="collapse-title text-sm font-medium">
+                        Filter States (<span x-text="selectedStates.length"></span> selected)
+                    </summary>
+                    <div class="collapse-content">
+                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-2 max-h-48 overflow-y-auto">
+                            <template x-for="state in availableStates" :key="state">
+                                <div class="form-control">
+                                    <label class="label cursor-pointer justify-start gap-2">
+                                        <input type="checkbox"
+                                               class="checkbox checkbox-sm"
+                                               :value="state"
+                                               x-model="selectedStates"
+                                               @change="renderChart()">
+                                        <span class="label-text text-xs" x-text="state"></span>
+                                    </label>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Loading State -->
+            <div x-show="loading" class="flex items-center justify-center h-96">
+                <span class="loading loading-spinner loading-lg"></span>
+            </div>
+
+            <!-- Error State -->
+            <div x-show="error && !loading" class="alert alert-error">
+                <span x-text="error"></span>
+            </div>
+
+            <!-- Chart Container -->
+            <div id="diseaseStateTrendChart" class="w-full" x-show="!loading && !error" style="min-height: 450px;"></div>
         </div>
     </div>
 
@@ -100,4 +141,83 @@
         Back to Home
     </a>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/disease-state-trend-chart.js"></script>
+<script>
+    // Register component immediately - Alpine will pick it up when it starts
+    if (window.Alpine) {
+        Alpine.data('diseaseChart', diseaseChartComponent);
+    } else {
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('diseaseChart', diseaseChartComponent);
+        });
+    }
+
+    function diseaseChartComponent() {
+        return {
+            chartData: null,
+            selectedStates: [],
+            availableStates: [],
+            loading: true,
+            error: null,
+
+            init() {
+                console.log('Chart component initialized');
+                this.loadData();
+            },
+
+            async loadData() {
+                console.log('Loading data for {{ disease_name }}');
+                try {
+                    const response = await fetch(`/api/timeseries/states/{{ disease_name }}?granularity=month`);
+                    console.log('Response status:', response.status);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    this.chartData = await response.json();
+                    console.log('Chart data loaded:', this.chartData);
+
+                    this.availableStates = this.chartData.available_states;
+                    this.selectedStates = [...this.availableStates];
+                    this.loading = false;
+
+                    requestAnimationFrame(() => this.renderChart());
+                } catch (err) {
+                    console.error('Error loading disease data:', err);
+                    this.error = 'Failed to load chart data';
+                    this.loading = false;
+                }
+            },
+
+            renderChart() {
+                console.log('Rendering chart');
+                if (!this.chartData) {
+                    console.warn('No chart data available');
+                    return;
+                }
+
+                createDiseaseStateTrendChart(
+                    'diseaseStateTrendChart',
+                    this.chartData,
+                    '{{ disease_name }}',
+                    this.selectedStates
+                );
+            },
+
+            selectAll() {
+                this.selectedStates = [...this.availableStates];
+                this.renderChart();
+            },
+
+            deselectAll() {
+                this.selectedStates = [];
+                this.renderChart();
+            }
+        }
+    }
+</script>
 {% endblock %}

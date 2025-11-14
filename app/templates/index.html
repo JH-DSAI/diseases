@@ -2,17 +2,17 @@
 
 {% block content %}
 <!-- Hero Section -->
-<article class="prose lg:prose-xl mx-auto mb-8">
+<article class="prose lg:prose-xl mb-8">
     <h1>Welcome to Our Platform</h1>
     <p>
-        This is an example of beautiful typography using Tailwind's prose classes.
-        The prose utility provides sensible typographic defaults for your content,
-        making it easy to create readable and visually appealing text without custom styling.
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+        incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud
+        exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
     </p>
     <p>
-        You can replace this placeholder content with your own text. The typography will
-        automatically scale responsively, ensuring your content looks great on all devices
-        from mobile phones to large desktop displays.
+        Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
+        fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+        culpa qui officia deserunt mollit anim id est laborum.
     </p>
 </article>
 
@@ -98,7 +98,7 @@
     <h2 class="text-3xl font-bold mb-6">National Disease Trends</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for disease in diseases %}
-        <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer"
+        <a href="/disease/{{ disease }}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer"
              x-data="{ chartData: null, error: null }"
              x-init="fetch('/api/timeseries/national/{{ disease }}', {
                          headers: {
@@ -124,49 +124,37 @@
                          console.error('Failed to fetch timeseries for {{ disease }}:', err);
                          error = err.message;
                          createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', [], '{{ disease }}');
-                     })"
-             onclick="window.location.href='/disease/{{ disease }}'">
+                     })">
             <div class="card-body">
                 <h3 class="card-title capitalize">{{ disease }}</h3>
-                <div id="chart-{{ disease | replace(' ', '-') }}" class="w-full" style="min-height: 200px;">
+                <div id="chart-{{ disease | replace(' ', '-') }}" class="w-full" style="min-height: 205px;">
                     <div class="flex items-center justify-center h-48">
                         <span class="loading loading-spinner loading-md"></span>
                     </div>
                 </div>
-                <div class="card-actions justify-end mt-2">
-                    <div class="badge badge-outline">Click to view details</div>
-                </div>
             </div>
-        </div>
+        </a>
         {% endfor %}
     </div>
 </div>
 {% endif %}
 
-<!-- Placeholder for Future Visualizations -->
-<div class="mt-12">
-    <h2 class="text-3xl font-bold mb-6">Data Visualizations</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Placeholder 1: Temporal Trends -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h3 class="card-title">Temporal Trends</h3>
-                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
-                    <p class="text-base-content/50">Coming soon: Time series visualization</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Placeholder 2: Geographic Distribution -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h3 class="card-title">Geographic Distribution</h3>
-                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
-                    <p class="text-base-content/50">Coming soon: Map visualization</p>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- About Section -->
+<div class="mt-12 prose lg:prose-xl">
+    <h3>About This System</h3>
+    <p>
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+        incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud
+        exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute
+        irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+        pariatur.
+    </p>
+    <p>
+        Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt
+        mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit
+        voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab
+        illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+    </p>
 </div>
 {% endblock %}
 

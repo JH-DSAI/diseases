@@ -10,10 +10,12 @@ from app.database import db
 from app.models import (
     DiseaseListItem,
     DiseaseListResponse,
+    DiseaseTimeSeriesByStateResponse,
     DiseaseTotalItem,
     HealthResponse,
     NationalDiseaseTimeSeriesDataPoint,
     NationalDiseaseTimeSeriesResponse,
+    StateTimeSeriesDataPoint,
     SummaryStatsResponse,
 )
 
@@ -107,3 +109,46 @@ async def get_national_disease_timeseries(disease_name: str, granularity: str = 
     except Exception as e:
         logger.error(f"Error fetching timeseries for {disease_name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch time series data") from e
+
+
+@router.get("/timeseries/states/{disease_name}", response_model=DiseaseTimeSeriesByStateResponse)
+async def get_disease_timeseries_by_state(disease_name: str, granularity: str = 'month'):
+    """
+    Get state-level time series data for a specific disease.
+
+    Args:
+        disease_name: Name of the disease
+        granularity: Time granularity ('month' or 'week'), defaults to 'month'
+
+    Returns:
+        Time series data broken down by state plus national total
+    """
+    try:
+        # Verify disease exists
+        diseases = db.get_diseases()
+        if disease_name not in diseases:
+            raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
+
+        # Get time series data
+        data = db.get_disease_timeseries_by_state(disease_name, granularity)
+
+        # Convert states data to proper format
+        states_formatted = {}
+        for state, state_data in data["states"].items():
+            states_formatted[state] = [StateTimeSeriesDataPoint(**point) for point in state_data]
+
+        # Convert national data to proper format
+        national_formatted = [StateTimeSeriesDataPoint(**point) for point in data["national"]]
+
+        return DiseaseTimeSeriesByStateResponse(
+            disease_name=disease_name,
+            granularity=granularity,
+            available_states=data["available_states"],
+            states=states_formatted,
+            national=national_formatted
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching state timeseries for {disease_name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch state time series data") from e
