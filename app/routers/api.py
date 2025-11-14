@@ -10,7 +10,10 @@ from app.database import db
 from app.models import (
     DiseaseListItem,
     DiseaseListResponse,
+    DiseaseTotalItem,
     HealthResponse,
+    NationalDiseaseTimeSeriesDataPoint,
+    NationalDiseaseTimeSeriesResponse,
     SummaryStatsResponse,
 )
 
@@ -71,3 +74,36 @@ async def get_summary_stats():
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch statistics") from e
+
+
+@router.get("/timeseries/national/{disease_name}", response_model=NationalDiseaseTimeSeriesResponse)
+async def get_national_disease_timeseries(disease_name: str, granularity: str = 'month'):
+    """
+    Get national time series data for a specific disease.
+
+    Args:
+        disease_name: Name of the disease
+        granularity: Time granularity ('month' or 'week'), defaults to 'month'
+
+    Returns:
+        Time series data points with period and total national cases
+    """
+    try:
+        # Verify disease exists
+        diseases = db.get_diseases()
+        if disease_name not in diseases:
+            raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
+
+        # Get time series data
+        data = db.get_national_disease_timeseries(disease_name, granularity)
+
+        return NationalDiseaseTimeSeriesResponse(
+            disease_name=disease_name,
+            granularity=granularity,
+            data=[NationalDiseaseTimeSeriesDataPoint(**point) for point in data]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching timeseries for {disease_name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch time series data") from e

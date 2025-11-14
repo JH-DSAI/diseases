@@ -2,48 +2,19 @@
 
 {% block content %}
 <!-- Hero Section -->
-<div class="hero min-h-[60vh] bg-base-100 rounded-lg shadow-xl mb-8">
-    <div class="hero-content text-center">
-        <div class="max-w-md">
-            <h1 class="text-5xl font-bold mb-4">Hello World</h1>
-            <p class="text-lg mb-6">Welcome to the US Disease Tracker Dashboard</p>
-            <p class="text-sm text-base-content/70 mb-8">
-                This dashboard provides interactive data visualizations for disease surveillance across the United States.
-            </p>
-
-            <!-- Stats Overview -->
-            <div class="stats stats-vertical lg:stats-horizontal shadow"
-                 x-data="{ stats: {} }"
-                 x-init="fetch('/api/stats', {
-                     headers: {
-                         'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
-                     }
-                 })
-                 .then(r => r.json())
-                 .then(data => stats = data)
-                 .catch(err => console.error('Failed to fetch stats:', err))">
-
-                <div class="stat">
-                    <div class="stat-title">Total Diseases</div>
-                    <div class="stat-value text-primary" x-text="stats.total_diseases || '-'">-</div>
-                    <div class="stat-desc">Being tracked</div>
-                </div>
-
-                <div class="stat">
-                    <div class="stat-title">Total Cases</div>
-                    <div class="stat-value text-secondary" x-text="stats.total_cases || '-'">-</div>
-                    <div class="stat-desc">Across all data</div>
-                </div>
-
-                <div class="stat">
-                    <div class="stat-title">States</div>
-                    <div class="stat-value" x-text="stats.total_states || '-'">-</div>
-                    <div class="stat-desc">With data</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<article class="prose lg:prose-xl mx-auto mb-8">
+    <h1>Welcome to Our Platform</h1>
+    <p>
+        This is an example of beautiful typography using Tailwind's prose classes.
+        The prose utility provides sensible typographic defaults for your content,
+        making it easy to create readable and visually appealing text without custom styling.
+    </p>
+    <p>
+        You can replace this placeholder content with your own text. The typography will
+        automatically scale responsively, ensuring your content looks great on all devices
+        from mobile phones to large desktop displays.
+    </p>
+</article>
 
 <!-- Disease Cards -->
 {% if diseases %}
@@ -79,6 +50,99 @@
 </div>
 {% endif %}
 
+<!-- Stats Overview -->
+<div class="mb-8">
+    <h2 class="text-3xl font-bold mb-6">National Overview</h2>
+    <div class="stats stats-vertical lg:stats-horizontal shadow w-full"
+         x-data="{ stats: {} }"
+         x-init="fetch('/api/stats', {
+                     headers: {
+                         'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                     }
+                 })
+                 .then(r => r.json())
+                 .then(data => stats = data)
+                 .catch(err => console.error('Failed to fetch stats:', err))">
+
+        <template x-if="stats.disease_totals && stats.disease_totals.length > 0">
+            <template x-for="disease in stats.disease_totals" :key="disease.disease_name">
+                <div class="stat">
+                    <div class="stat-title capitalize" x-text="disease.disease_name + ' Cases'"></div>
+                    <div class="stat-value text-primary" x-text="disease.total_cases.toLocaleString()">-</div>
+                    <div class="stat-desc">Total for all states with data</div>
+                </div>
+            </template>
+        </template>
+
+        <template x-if="stats.disease_totals && stats.disease_totals.length > 0">
+            <div class="stat">
+                <div class="stat-title">Last Updated</div>
+                <div class="stat-value text-secondary" x-text="stats.latest_date ? new Date(stats.latest_date).toLocaleDateString() : '-'">-</div>
+                <div class="stat-desc">Most recent data from CSVs</div>
+            </div>
+        </template>
+
+        <template x-if="!stats.disease_totals || stats.disease_totals.length === 0">
+            <div class="stat">
+                <div class="stat-title">No Data</div>
+                <div class="stat-value">-</div>
+                <div class="stat-desc">Loading...</div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<!-- National Disease Trends -->
+{% if diseases %}
+<div class="mb-8">
+    <h2 class="text-3xl font-bold mb-6">National Disease Trends</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for disease in diseases %}
+        <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer"
+             x-data="{ chartData: null, error: null }"
+             x-init="fetch('/api/timeseries/national/{{ disease }}', {
+                         headers: {
+                             'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                         }
+                     })
+                     .then(r => {
+                         if (!r.ok) {
+                             throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                         }
+                         return r.json();
+                     })
+                     .then(data => {
+                         console.log('Timeseries data for {{ disease }}:', data);
+                         chartData = data;
+                         if (data && data.data) {
+                             createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', data.data, data.disease_name);
+                         } else {
+                             createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', [], '{{ disease }}');
+                         }
+                     })
+                     .catch(err => {
+                         console.error('Failed to fetch timeseries for {{ disease }}:', err);
+                         error = err.message;
+                         createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', [], '{{ disease }}');
+                     })"
+             onclick="window.location.href='/disease/{{ disease }}'">
+            <div class="card-body">
+                <h3 class="card-title capitalize">{{ disease }}</h3>
+                <div id="chart-{{ disease | replace(' ', '-') }}" class="w-full" style="min-height: 200px;">
+                    <div class="flex items-center justify-center h-48">
+                        <span class="loading loading-spinner loading-md"></span>
+                    </div>
+                </div>
+                <div class="card-actions justify-end mt-2">
+                    <div class="badge badge-outline">Click to view details</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Placeholder for Future Visualizations -->
 <div class="mt-12">
     <h2 class="text-3xl font-bold mb-6">Data Visualizations</h2>
@@ -104,4 +168,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/national-disease-trend-chart.js"></script>
 {% endblock %}
