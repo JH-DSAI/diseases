@@ -25,7 +25,7 @@ templates = Jinja2Templates(directory=str(templates_dir))
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """
-    Landing page with Hello World and navigation.
+    Landing page with navigation.
 
     Args:
         request: FastAPI request object

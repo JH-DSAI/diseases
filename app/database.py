@@ -49,7 +49,8 @@ class DiseaseDatabase:
         all_data = []
         for csv_file in csv_files:
             try:
-                df = pd.read_csv(csv_file)
+                # Parse date columns during CSV loading
+                df = pd.read_csv(csv_file, parse_dates=['report_period_start', 'report_period_end'])
                 logger.info(f"Loaded {csv_file.name}: {len(df)} rows")
                 all_data.append(df)
             except Exception as e:
@@ -150,8 +151,50 @@ class DiseaseDatabase:
             "total_states": stats[2],
             "total_cases": stats[3],
             "earliest_date": stats[4],
-            "latest_date": stats[5]
+            "latest_date": stats[5],
+            "disease_totals": self.get_disease_totals()
         }
+
+    def get_disease_totals(self) -> list[dict]:
+        """Get total case counts for each disease"""
+        if not self._initialized:
+            return []
+
+        result = self.conn.execute("""
+            SELECT
+                disease_name,
+                SUM(count) as total_cases
+            FROM disease_data
+            GROUP BY disease_name
+            ORDER BY disease_name
+        """).fetchall()
+
+        return [{"disease_name": row[0], "total_cases": int(row[1]) if row[1] else 0} for row in result]
+
+    def get_national_disease_timeseries(self, disease_name: str, granularity: str = 'month') -> list[dict]:
+        """Get time series data for a disease aggregated nationally by month or week"""
+        if not self._initialized:
+            return []
+
+        # Validate granularity (must be literal for DATE_TRUNC)
+        if granularity not in ['month', 'week']:
+            granularity = 'month'
+
+        # Build query with granularity as literal (DuckDB requires this)
+        # report_period_start is now a proper TIMESTAMP type from pandas datetime parsing
+        query = f"""
+            SELECT
+                DATE_TRUNC('{granularity}', report_period_start) as period,
+                SUM(count) as total_cases
+            FROM disease_data
+            WHERE disease_name = ?
+            GROUP BY DATE_TRUNC('{granularity}', report_period_start)
+            ORDER BY period ASC
+        """
+
+        result = self.conn.execute(query, [disease_name]).fetchall()
+
+        return [{"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0} for row in result]
 
     def close(self):
         """Close database connection"""
