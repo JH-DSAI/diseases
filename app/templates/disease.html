@@ -54,27 +54,17 @@
 
             <!-- State Filter -->
             <div class="mb-4" x-show="chartData !== null">
-                <details class="collapse collapse-arrow bg-base-200">
-                    <summary class="collapse-title text-sm font-medium">
-                        Filter States (<span x-text="selectedStates.length"></span> selected)
-                    </summary>
-                    <div class="collapse-content">
-                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-2 max-h-48 overflow-y-auto">
-                            <template x-for="state in availableStates" :key="state">
-                                <div class="form-control">
-                                    <label class="label cursor-pointer justify-start gap-2">
-                                        <input type="checkbox"
-                                               class="checkbox checkbox-sm"
-                                               :value="state"
-                                               x-model="selectedStates"
-                                               @change="renderChart()">
-                                        <span class="label-text text-xs" x-text="state"></span>
-                                    </label>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </details>
+                <h4 class="text-sm font-medium mb-3">Select states to display (national total shown by default)</h4>
+                <div class="filter flex flex-wrap gap-2">
+                    <template x-for="state in availableStates" :key="state">
+                        <input type="checkbox"
+                               :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm'"
+                               :aria-label="state"
+                               :value="state"
+                               x-model="selectedStates"
+                               @change="renderChart()">
+                    </template>
+                </div>
             </div>
 
             <!-- Loading State -->
