@@ -29,7 +29,7 @@ function createNationalDiseaseTrendChart(containerId, data, diseaseName) {
     const containerWidth = container.clientWidth;
     const margin = { top: 20, right: 20, bottom: 40, left: 60 };
     const width = containerWidth - margin.left - margin.right;
-    const height = 200 - margin.top - margin.bottom;
+    const height = 205 - margin.top - margin.bottom;
 
     // Parse dates
     const parseDate = d3.timeParse("%Y-%m-%d");
