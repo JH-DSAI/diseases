@@ -4,8 +4,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.database import db
@@ -50,6 +51,62 @@ async def lifespan(app: FastAPI):
     db.close()
 
 
+class CookieAuthMiddleware(BaseHTTPMiddleware):
+    """
+    Cookie-based authentication middleware.
+
+    When user visits with ?key= parameter:
+    1. Validates the key
+    2. Sets an HTTP-only cookie with the key
+    3. Browser automatically sends cookie on all subsequent requests
+
+    On subsequent requests:
+    1. Checks for auth cookie
+    2. Injects cookie value as Authorization header
+
+    This allows sharing URLs like: https://app.fly.dev/?key=abc123...
+    After first visit, browser handles authentication automatically.
+    """
+    COOKIE_NAME = "auth_key"
+    COOKIE_MAX_AGE = 86400 * 7  # 7 days
+
+    async def dispatch(self, request: Request, call_next):
+        key_from_query = request.query_params.get("key")
+        key_from_cookie = request.cookies.get(self.COOKIE_NAME)
+
+        # Determine which key to use
+        auth_key = key_from_query or key_from_cookie
+
+        # If we have a key, inject it as Authorization header
+        if auth_key and "authorization" not in request.headers:
+            headers = dict(request.headers)
+            headers["authorization"] = f"Bearer {auth_key}"
+
+            # Update request scope with new headers
+            request._headers = headers
+            request.scope["headers"] = [
+                (k.lower().encode(), v.encode())
+                for k, v in headers.items()
+            ]
+
+        # Process the request
+        response = await call_next(request)
+
+        # If key came from query param and request was successful, set cookie
+        # Only set cookie if the response is successful (not 401)
+        if key_from_query and response.status_code < 400:
+            response.set_cookie(
+                key=self.COOKIE_NAME,
+                value=key_from_query,
+                max_age=self.COOKIE_MAX_AGE,
+                httponly=True,  # Prevents JavaScript access
+                secure=True,     # Only sent over HTTPS
+                samesite="lax"   # CSRF protection
+            )
+
+        return response
+
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
@@ -57,6 +114,9 @@ app = FastAPI(
     description="US Disease Tracker Dashboard - Data visualizations for disease surveillance",
     lifespan=lifespan
 )
+
+# Add cookie-based auth middleware
+app.add_middleware(CookieAuthMiddleware)
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"

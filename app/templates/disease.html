@@ -14,67 +14,137 @@
 </div>
 
 <!-- Disease Statistics -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <!-- Summary Card -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Overview</h3>
-            <div class="stat-value text-3xl text-primary">-</div>
-            <p class="text-sm text-base-content/70">Total cases</p>
-        </div>
-    </div>
+<div class="mb-8">
+    <div class="stats stats-vertical lg:stats-horizontal shadow w-full"
+         x-data="{ stats: null, loading: true }"
+         x-init="fetch('/api/disease/{{ disease_name }}/stats', {
+                     headers: {
+                         'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                     }
+                 })
+                 .then(r => r.json())
+                 .then(data => {
+                     stats = data;
+                     loading = false;
+                 })
+                 .catch(err => {
+                     console.error('Failed to fetch disease stats:', err);
+                     loading = false;
+                 })">
 
-    <!-- Trend Card -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Recent Trend</h3>
-            <div class="stat-value text-3xl text-secondary">-</div>
-            <p class="text-sm text-base-content/70">Last 30 days</p>
-        </div>
-    </div>
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Total Cases</div>
+                <div class="stat-value text-primary" x-text="stats.total_cases.toLocaleString()">-</div>
+                <div class="stat-desc">All reported cases</div>
+            </div>
+        </template>
 
-    <!-- States Card -->
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h3 class="card-title text-lg">States Affected</h3>
-            <div class="stat-value text-3xl">-</div>
-            <p class="text-sm text-base-content/70">With reported cases</p>
-        </div>
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Affected Counties/Regions</div>
+                <div class="stat-value text-secondary" x-text="stats.affected_counties.toLocaleString()">-</div>
+                <div class="stat-desc">Geographic areas with cases</div>
+            </div>
+        </template>
+
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Affected States/Jurisdictions</div>
+                <div class="stat-value" x-text="stats.affected_states.toLocaleString()">-</div>
+                <div class="stat-desc">States reporting cases</div>
+            </div>
+        </template>
+
+        <template x-if="!loading && stats">
+            <div class="stat">
+                <div class="stat-title">Latest 2-Week Cases</div>
+                <div class="stat-value text-accent" x-text="stats.two_week_cases.toLocaleString()">-</div>
+                <div class="stat-desc">Recent trend</div>
+            </div>
+        </template>
+
+        <template x-if="loading">
+            <div class="stat">
+                <div class="stat-title">Loading...</div>
+                <div class="stat-value"><span class="loading loading-spinner loading-md"></span></div>
+                <div class="stat-desc">Fetching statistics</div>
+            </div>
+        </template>
     </div>
 </div>
 
 <!-- Visualization Placeholders -->
-<div class="space-y-8">
+<div class="space-y-8" x-data="diseaseChart">
     <!-- Time Series Chart -->
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-            <h3 class="card-title">Cases Over Time</h3>
-            <div class="h-96 flex items-center justify-center bg-base-200 rounded">
-                <p class="text-base-content/50">Coming soon: D3.js time series chart</p>
+            <div class="mb-4">
+                <h3 class="card-title">Cases Over Time by State</h3>
             </div>
+
+            <!-- State Filter -->
+            <div class="mb-4" x-show="chartData !== null">
+                <h4 class="text-sm font-medium mb-3">Select states to display (national total shown by default)</h4>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="state in availableStates" :key="state">
+                        <input type="checkbox"
+                               :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
+                               :aria-label="state"
+                               :value="state"
+                               x-model="selectedStates"
+                               @change="renderTimeSeriesChart()">
+                    </template>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div x-show="loading" class="flex items-center justify-center h-96">
+                <span class="loading loading-spinner loading-lg"></span>
+            </div>
+
+            <!-- Error State -->
+            <div x-show="error && !loading" class="alert alert-error">
+                <span x-text="error"></span>
+            </div>
+
+            <!-- Chart Container -->
+            <div id="diseaseStateTrendChart" class="w-full" x-show="!loading && !error" style="min-height: 450px;"></div>
         </div>
     </div>
 
-    <!-- Geographic and Demographic Charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Age Distribution -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h3 class="card-title">Age Group Distribution</h3>
-                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
-                    <p class="text-base-content/50">Coming soon: Age distribution bar chart</p>
-                </div>
-            </div>
-        </div>
+    <!-- Age Group Distribution Chart -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h3 class="card-title mb-4">Cases by Age Group</h3>
 
-        <!-- Geographic Breakdown -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h3 class="card-title">Geographic Breakdown</h3>
-                <div class="h-64 flex items-center justify-center bg-base-200 rounded">
-                    <p class="text-base-content/50">Coming soon: Regional comparison</p>
+            <!-- State Filter -->
+            <div class="mb-4" x-show="ageGroupData !== null">
+                <h4 class="text-sm font-medium mb-3">Select states to display</h4>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="state in availableStates" :key="state">
+                        <input type="checkbox"
+                               :class="selectedAgeGroupStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
+                               :aria-label="state"
+                               :value="state"
+                               x-model="selectedAgeGroupStates"
+                               @change="renderAgeGroupChart()">
+                    </template>
                 </div>
             </div>
+
+            <!-- Loading State -->
+            <div x-show="ageGroupLoading" class="flex items-center justify-center h-96">
+                <span class="loading loading-spinner loading-lg"></span>
+            </div>
+
+            <!-- Error State -->
+            <div x-show="ageGroupError && !ageGroupLoading" class="alert alert-error">
+                <span x-text="ageGroupError"></span>
+            </div>
+
+            <!-- Chart Container -->
+            <div id="ageGroupChart" class="w-full" x-show="!ageGroupLoading && !ageGroupError" style="min-height: 450px;"></div>
         </div>
     </div>
 
@@ -100,4 +170,130 @@
         Back to Home
     </a>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/disease-state-trend-chart.js"></script>
+<script src="/static/js/age-group-chart.js"></script>
+<script>
+    // Register component immediately - Alpine will pick it up when it starts
+    if (window.Alpine) {
+        Alpine.data('diseaseChart', diseaseChartComponent);
+    } else {
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('diseaseChart', diseaseChartComponent);
+        });
+    }
+
+    function diseaseChartComponent() {
+        return {
+            chartData: null,
+            ageGroupData: null,
+            selectedStates: [],
+            selectedAgeGroupStates: [],
+            availableStates: [],
+            loading: true,
+            error: null,
+            ageGroupLoading: true,
+            ageGroupError: null,
+
+            init() {
+                console.log('Chart component initialized');
+                this.loadData();
+                this.loadAgeGroupData();
+            },
+
+            async loadData() {
+                console.log('Loading timeseries data for {{ disease_name }}');
+                try {
+                    const response = await fetch(`/api/timeseries/states/{{ disease_name }}?granularity=month`, {
+                        headers: {
+                            'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                        }
+                    });
+                    console.log('Response status:', response.status);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    this.chartData = await response.json();
+                    console.log('Chart data loaded:', this.chartData);
+
+                    this.availableStates = this.chartData.available_states;
+                    this.selectedStates = [...this.availableStates];
+                    this.selectedAgeGroupStates = [...this.availableStates];
+                    this.loading = false;
+
+                    // Wait for Alpine to update the DOM before rendering
+                    this.$nextTick(() => {
+                        requestAnimationFrame(() => this.renderTimeSeriesChart());
+                    });
+                } catch (err) {
+                    console.error('Error loading disease data:', err);
+                    this.error = 'Failed to load chart data';
+                    this.loading = false;
+                }
+            },
+
+            async loadAgeGroupData() {
+                console.log('Loading age group data for {{ disease_name }}');
+                try {
+                    const response = await fetch(`/api/disease/{{ disease_name }}/age-groups`, {
+                        headers: {
+                            'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                        }
+                    });
+                    console.log('Age group response status:', response.status);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    this.ageGroupData = await response.json();
+                    console.log('Age group data loaded:', this.ageGroupData);
+
+                    this.ageGroupLoading = false;
+
+                    // Wait for Alpine to update the DOM before rendering
+                    this.$nextTick(() => {
+                        requestAnimationFrame(() => this.renderAgeGroupChart());
+                    });
+                } catch (err) {
+                    console.error('Error loading age group data:', err);
+                    this.ageGroupError = 'Failed to load age group data';
+                    this.ageGroupLoading = false;
+                }
+            },
+
+            renderTimeSeriesChart() {
+                if (!this.chartData) {
+                    console.warn('No chart data available');
+                    return;
+                }
+
+                createDiseaseStateTrendChart(
+                    'diseaseStateTrendChart',
+                    this.chartData,
+                    '{{ disease_name }}',
+                    this.selectedStates
+                );
+            },
+
+            renderAgeGroupChart() {
+                if (!this.ageGroupData) {
+                    console.warn('No age group data available');
+                    return;
+                }
+
+                createAgeGroupChart(
+                    'ageGroupChart',
+                    this.ageGroupData,
+                    '{{ disease_name }}',
+                    this.selectedAgeGroupStates
+                );
+            }
+        }
+    }
+</script>
 {% endblock %}

@@ -53,6 +53,50 @@ class NationalDiseaseTimeSeriesResponse(BaseModel):
     data: list[NationalDiseaseTimeSeriesDataPoint] = Field(..., description="Time series data points")
 
 
+class StateTimeSeriesDataPoint(BaseModel):
+    """State-level time series data point model"""
+    period: str = Field(..., description="Time period (YYYY-MM-DD format)")
+    cases: int = Field(..., description="Cases for this state in this period")
+
+
+class StateTimeSeriesData(BaseModel):
+    """State-level time series data model"""
+    state: str = Field(..., description="State name")
+    data: list[StateTimeSeriesDataPoint] = Field(..., description="Time series data points for this state")
+
+
+class DiseaseTimeSeriesByStateResponse(BaseModel):
+    """Disease time series by state response model"""
+    disease_name: str = Field(..., description="Disease name")
+    granularity: str = Field(..., description="Time granularity (month or week)")
+    available_states: list[str] = Field(..., description="List of states with data for this disease")
+    states: dict[str, list[StateTimeSeriesDataPoint]] = Field(..., description="Time series data by state")
+    national: list[StateTimeSeriesDataPoint] = Field(..., description="National total time series data")
+
+
+class DiseaseStatsResponse(BaseModel):
+    """Disease-specific statistics response model"""
+    disease_name: str = Field(..., description="Disease name")
+    total_cases: int = Field(..., description="Total cases for this disease")
+    affected_states: int = Field(..., description="Number of affected states/jurisdictions")
+    affected_counties: int = Field(..., description="Number of affected counties/regions")
+    two_week_cases: int = Field(..., description="Cases in the latest 2-week period")
+
+
+class AgeGroupData(BaseModel):
+    """Age group case data"""
+    count: int = Field(..., description="Number of cases in this age group")
+    percentage: float = Field(..., description="Percentage of total cases in this age group")
+
+
+class AgeGroupDistributionResponse(BaseModel):
+    """Age group distribution by state response model"""
+    disease_name: str = Field(..., description="Disease name")
+    age_groups: list[str] = Field(..., description="List of age groups")
+    available_states: list[str] = Field(..., description="List of states with age group data")
+    states: dict[str, dict[str, AgeGroupData]] = Field(..., description="Age group distribution by state")
+
+
 class ErrorResponse(BaseModel):
     """Error response model"""
     detail: str = Field(..., description="Error detail message")

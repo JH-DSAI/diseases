@@ -1,0 +1,66 @@
+name: Build Assets
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'app/static/css/**'
+      - 'app/static/js/vendor.js'
+      - 'app/templates/**'
+      - 'tailwind.config.js'
+      - 'package.json'
+      - 'vite.config.js'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'app/static/css/**'
+      - 'app/static/js/vendor.js'
+      - 'app/templates/**'
+      - 'tailwind.config.js'
+      - 'package.json'
+      - 'vite.config.js'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build assets (CSS + JS)
+        run: npm run build
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --quiet app/static/dist/ || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit built assets
+        if: steps.check_changes.outputs.changed == 'true' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f app/static/dist/
+          git commit -m "chore: rebuild frontend assets [skip ci]"
+          git push
+
+      - name: Upload built assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-assets
+          path: app/static/dist/
