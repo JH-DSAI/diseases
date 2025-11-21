@@ -208,51 +208,77 @@ class NNDSSTransformer:
         """Classify records as state, region, or national level."""
         df = df.copy()
 
-        def classify(row):
-            reporting_area = row["Reporting Area"]
-            if reporting_area in self.REGIONS:
-                if reporting_area in ["US RESIDENTS", "NON-US RESIDENTS", "TOTAL"]:
-                    return "national"
-                return "region"
-            return "state"
+        # Vectorized classification - much faster than apply()
+        # Default to state
+        df["geo_unit"] = "state"
 
-        df["geo_unit"] = df.apply(classify, axis=1)
+        # Mark regions
+        df.loc[df["Reporting Area"].isin(self.REGIONS), "geo_unit"] = "region"
+
+        # Mark national level (overrides region)
+        national_areas = ["US RESIDENTS", "NON-US RESIDENTS", "TOTAL"]
+        df.loc[df["Reporting Area"].isin(national_areas), "geo_unit"] = "national"
+
         return df
 
     def _parse_dates(self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert MMWR year/week to date ranges."""
         df = df.copy()
 
-        def get_dates(row):
+        # Vectorized approach: compute dates for unique (year, week) combinations
+        # then merge back. This is much faster than computing for every row.
+        unique_weeks = (
+            df[["Current MMWR Year", "MMWR WEEK"]]
+            .drop_duplicates()
+            .dropna()
+            .copy()
+        )
+
+        # Compute dates for each unique combination
+        starts = []
+        ends = []
+        for _, row in unique_weeks.iterrows():
             try:
                 year = int(row["Current MMWR Year"])
                 week = int(row["MMWR WEEK"])
                 start = self.mmwr_converter.get_mmwr_week_start(year, week)
                 end = self.mmwr_converter.get_mmwr_week_end(year, week)
-                return pd.Series({"report_period_start": start, "report_period_end": end})
+                starts.append(start)
+                ends.append(end)
             except (ValueError, TypeError):
-                return pd.Series({"report_period_start": pd.NaT, "report_period_end": pd.NaT})
+                starts.append(pd.NaT)
+                ends.append(pd.NaT)
 
-        df[["report_period_start", "report_period_end"]] = df.apply(get_dates, axis=1)
+        unique_weeks["report_period_start"] = starts
+        unique_weeks["report_period_end"] = ends
+
+        # Merge back to original dataframe
+        df = df.merge(
+            unique_weeks,
+            on=["Current MMWR Year", "MMWR WEEK"],
+            how="left"
+        )
+
         return df
 
     def _clean_case_counts(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and convert case count data to integers."""
         df = df.copy()
 
-        def clean_count(val):
-            if pd.isna(val) or val == "" or val == "-":
-                return None
-            try:
-                # Remove any non-numeric characters except digits
-                cleaned = "".join(c for c in str(val) if c.isdigit())
-                if cleaned:
-                    return int(cleaned)
-                return None
-            except (ValueError, AttributeError):
-                return None
+        # Vectorized string operations - much faster than apply()
+        # Start with the current week column
+        counts = df["Current week"].astype(str)
 
-        df["count"] = df["Current week"].apply(clean_count)
+        # Replace common non-numeric indicators with empty string
+        counts = counts.replace(["nan", "-", "", " "], "")
+
+        # Extract only digits using regex
+        counts = counts.str.replace(r"\D", "", regex=True)
+
+        # Convert to numeric, empty strings become NaN
+        counts = counts.replace("", pd.NA)
+        df["count"] = pd.to_numeric(counts, errors="coerce")
+
         return df
 
     def _normalize_disease_names(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -277,18 +303,29 @@ class NNDSSTransformer:
         """Convert state names to 2-letter codes."""
         df = df.copy()
 
-        def get_state_code(row):
-            reporting_area = row["Reporting Area"]
-            geo_unit = row["geo_unit"]
+        # Vectorized state code assignment - much faster than apply()
+        # Default: use reporting area as-is
+        df["state"] = df["Reporting Area"]
 
-            if geo_unit == "state":
-                return self.STATE_CODES.get(reporting_area.upper(), reporting_area)
-            elif geo_unit == "region":
-                return row["LOCATION2"] if pd.notna(row["LOCATION2"]) else reporting_area
-            else:  # national
-                return "US"
+        # For state-level records, map to state codes
+        state_mask = df["geo_unit"] == "state"
+        df.loc[state_mask, "state"] = (
+            df.loc[state_mask, "Reporting Area"]
+            .str.upper()
+            .map(self.STATE_CODES)
+            .fillna(df.loc[state_mask, "Reporting Area"])
+        )
 
-        df["state"] = df.apply(get_state_code, axis=1)
+        # For regions, use LOCATION2 if available, otherwise reporting area
+        region_mask = df["geo_unit"] == "region"
+        df.loc[region_mask, "state"] = df.loc[region_mask, "LOCATION2"].fillna(
+            df.loc[region_mask, "Reporting Area"]
+        )
+
+        # For national level, set to "US"
+        national_mask = df["geo_unit"] == "national"
+        df.loc[national_mask, "state"] = "US"
+
         return df
 
     def _map_to_unified_schema(self, df: pd.DataFrame) -> pd.DataFrame:

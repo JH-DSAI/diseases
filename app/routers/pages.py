@@ -1,5 +1,6 @@
 """HTML/HTMX page endpoints"""
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -34,7 +35,7 @@ async def landing_page(request: Request):
         Rendered HTML template
     """
     # Get available diseases for navigation
-    diseases = db.get_diseases() if db._initialized else []
+    diseases = await asyncio.to_thread(db.get_diseases) if db._initialized else []
 
     return templates.TemplateResponse(
         "index.html",
@@ -58,7 +59,7 @@ async def disease_detail_page(request: Request, disease_name: str):
     Returns:
         Rendered HTML template
     """
-    diseases = db.get_diseases() if db._initialized else []
+    diseases = await asyncio.to_thread(db.get_diseases) if db._initialized else []
 
     # Verify disease exists
     if db._initialized and disease_name not in diseases:

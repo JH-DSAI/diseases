@@ -1,5 +1,6 @@
 """JSON API endpoints"""
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -58,7 +59,7 @@ async def list_diseases(data_source: str | None = None):
         List of disease names
     """
     try:
-        diseases = db.get_diseases(data_source=data_source)
+        diseases = await asyncio.to_thread(db.get_diseases, data_source=data_source)
         return DiseaseListResponse(
             diseases=[DiseaseListItem(name=d) for d in diseases],
             count=len(diseases)
@@ -80,7 +81,7 @@ async def get_summary_stats(data_source: str | None = None):
         Summary statistics including total cases, date ranges, etc.
     """
     try:
-        stats = db.get_summary_stats(data_source=data_source)
+        stats = await asyncio.to_thread(db.get_summary_stats, data_source=data_source)
         return SummaryStatsResponse(**stats)
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
@@ -103,12 +104,12 @@ async def get_national_disease_timeseries(disease_name: str, granularity: str = 
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases(data_source=data_source)
+        diseases = await asyncio.to_thread(db.get_diseases, data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get time series data
-        data = db.get_national_disease_timeseries(disease_name, granularity, data_source=data_source)
+        data = await asyncio.to_thread(db.get_national_disease_timeseries, disease_name, granularity, data_source=data_source)
 
         return NationalDiseaseTimeSeriesResponse(
             disease_name=disease_name,
@@ -138,12 +139,12 @@ async def get_disease_timeseries_by_state(disease_name: str, granularity: str = 
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases(data_source=data_source)
+        diseases = await asyncio.to_thread(db.get_diseases, data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get time series data
-        data = db.get_disease_timeseries_by_state(disease_name, granularity, data_source=data_source)
+        data = await asyncio.to_thread(db.get_disease_timeseries_by_state, disease_name, granularity, data_source=data_source)
 
         # Convert states data to proper format
         states_formatted = {}
@@ -181,12 +182,12 @@ async def get_disease_stats(disease_name: str, data_source: str | None = None):
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases(data_source=data_source)
+        diseases = await asyncio.to_thread(db.get_diseases, data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get disease stats
-        stats = db.get_disease_stats(disease_name, data_source=data_source)
+        stats = await asyncio.to_thread(db.get_disease_stats, disease_name, data_source=data_source)
 
         return DiseaseStatsResponse(
             disease_name=disease_name,
@@ -217,12 +218,12 @@ async def get_age_group_distribution(disease_name: str, data_source: str | None 
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases(data_source=data_source)
+        diseases = await asyncio.to_thread(db.get_diseases, data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get age group distribution
-        data = db.get_age_group_distribution_by_state(disease_name, data_source=data_source)
+        data = await asyncio.to_thread(db.get_age_group_distribution_by_state, disease_name, data_source=data_source)
 
         # Convert to proper format
         states_formatted = {}
