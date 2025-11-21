@@ -25,7 +25,7 @@ class DiseaseDatabase:
         return self.conn
 
     def load_csv_files(self) -> None:
-        """Load all CSV files from data directory into DuckDB"""
+        """Load latest CSV file per state from data directory into DuckDB"""
         if self._initialized:
             logger.info("Database already initialized")
             return
@@ -38,12 +38,32 @@ class DiseaseDatabase:
             return
 
         # Find all CSV files
-        csv_files = list(data_dir.rglob("*.csv"))
-        logger.info(f"Found {len(csv_files)} CSV files")
+        all_csv_files = list(data_dir.rglob("*.csv"))
+        logger.info(f"Found {len(all_csv_files)} total CSV files")
 
-        if not csv_files:
+        if not all_csv_files:
             logger.warning("No CSV files found to load")
             return
+
+        # Group files by state and select the latest for each
+        # File format: YYYYMMDD-HHMMSS_STATE_UPLOADERNAME.csv
+        from collections import defaultdict
+        files_by_state = defaultdict(list)
+
+        for csv_file in all_csv_files:
+            # Extract state from parent directory name
+            state = csv_file.parent.name
+            files_by_state[state].append(csv_file)
+
+        # Select the latest file for each state (sorted by filename, which includes timestamp)
+        csv_files = []
+        for state, state_files in files_by_state.items():
+            # Sort by filename descending (latest timestamp first)
+            latest_file = sorted(state_files, key=lambda f: f.name, reverse=True)[0]
+            csv_files.append(latest_file)
+            logger.info(f"Selected latest file for {state}: {latest_file.name}")
+
+        logger.info(f"Loading {len(csv_files)} latest files (one per state)")
 
         # Load each CSV into a temporary list
         all_data = []
