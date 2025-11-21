@@ -16,91 +16,16 @@
     </p>
 </article>
 
-<!-- Disease Cards -->
+<!-- Tracked Diseases -->
 {% if diseases %}
 <div class="mb-8">
     <h2 class="text-3xl font-bold mb-6">Tracked Diseases</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for disease in diseases %}
-        <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-            <div class="card-body">
-                <h3 class="card-title capitalize">{{ disease }}</h3>
-                <p class="text-sm text-base-content/70">
-                    View detailed statistics and visualizations for {{ disease }}.
-                </p>
-                <div class="card-actions justify-end mt-4">
-                    <a href="/disease/{{ disease }}" class="btn btn-primary btn-sm">
-                        View Details
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% else %}
-<div class="alert alert-info">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-    </svg>
-    <span>No disease data loaded. Please check the data directory.</span>
-</div>
-{% endif %}
-
-<!-- Stats Overview -->
-<div class="mb-8">
-    <h2 class="text-3xl font-bold mb-6">National Overview</h2>
-    <div class="stats stats-vertical lg:stats-horizontal shadow w-full"
-         x-data="{ stats: {} }"
-         x-init="fetch('/api/stats', {
-                     headers: {
-                         'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
-                     }
-                 })
-                 .then(r => r.json())
-                 .then(data => stats = data)
-                 .catch(err => console.error('Failed to fetch stats:', err))">
-
-        <template x-if="stats.disease_totals && stats.disease_totals.length > 0">
-            <template x-for="disease in stats.disease_totals" :key="disease.disease_name">
-                <div class="stat">
-                    <div class="stat-title capitalize" x-text="disease.disease_name + ' Cases'"></div>
-                    <div class="stat-value text-primary" x-text="disease.total_cases.toLocaleString()">-</div>
-                    <div class="stat-desc">Total for all states with data</div>
-                </div>
-            </template>
-        </template>
-
-        <template x-if="stats.disease_totals && stats.disease_totals.length > 0">
-            <div class="stat">
-                <div class="stat-title">Last Updated</div>
-                <div class="stat-value text-secondary" x-text="stats.latest_date ? new Date(stats.latest_date).toLocaleDateString() : '-'">-</div>
-                <div class="stat-desc">Most recent data from CSVs</div>
-            </div>
-        </template>
-
-        <template x-if="!stats.disease_totals || stats.disease_totals.length === 0">
-            <div class="stat">
-                <div class="stat-title">No Data</div>
-                <div class="stat-value">-</div>
-                <div class="stat-desc">Loading...</div>
-            </div>
-        </template>
-    </div>
-</div>
-
-<!-- National Disease Trends -->
-{% if diseases %}
-<div class="mb-8">
-    <h2 class="text-3xl font-bold mb-6">National Disease Trends</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for disease in diseases %}
         <a href="/disease/{{ disease }}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer"
-             x-data="{ chartData: null, error: null }"
-             x-init="fetch('/api/timeseries/national/{{ disease }}', {
+             x-data="{ chartData: null, error: null, cumulativeTotal: null }"
+             x-init="// Fetch timeseries data
+                     fetch('/api/timeseries/national/{{ disease }}', {
                          headers: {
                              'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
                          }
@@ -124,13 +49,34 @@
                          console.error('Failed to fetch timeseries for {{ disease }}:', err);
                          error = err.message;
                          createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', [], '{{ disease }}');
-                     })">
+                     });
+
+                     // Fetch cumulative total
+                     fetch('/api/stats', {
+                         headers: {
+                             'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
+                         }
+                     })
+                     .then(r => r.json())
+                     .then(data => {
+                         if (data.disease_totals) {
+                             const diseaseData = data.disease_totals.find(d => d.disease_name === '{{ disease }}');
+                             if (diseaseData) {
+                                 cumulativeTotal = diseaseData.total_cases;
+                             }
+                         }
+                     })
+                     .catch(err => console.error('Failed to fetch stats for {{ disease }}:', err))">
             <div class="card-body">
                 <h3 class="card-title capitalize">{{ disease }}</h3>
                 <div id="chart-{{ disease | replace(' ', '-') }}" class="w-full" style="min-height: 205px;">
                     <div class="flex items-center justify-center h-48">
                         <span class="loading loading-spinner loading-md"></span>
                     </div>
+                </div>
+                <div class="mt-4 text-center">
+                    <div class="text-sm text-base-content/70">Cumulative Total</div>
+                    <div class="text-2xl font-bold text-primary" x-text="cumulativeTotal ? cumulativeTotal.toLocaleString() : '-'">-</div>
                 </div>
             </div>
         </a>
