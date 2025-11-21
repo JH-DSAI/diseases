@@ -29,6 +29,12 @@ class DiseaseTotalItem(BaseModel):
     total_cases: int = Field(..., description="Total cases nationally (across all states)")
 
 
+class DataSourceBreakdown(BaseModel):
+    """Data source breakdown model"""
+    records: int = Field(..., description="Number of records from this source")
+    cases: int = Field(..., description="Number of cases from this source")
+
+
 class SummaryStatsResponse(BaseModel):
     """Summary statistics response model"""
     total_records: int = Field(0, description="Total number of records")
@@ -38,6 +44,7 @@ class SummaryStatsResponse(BaseModel):
     earliest_date: datetime | None = Field(None, description="Earliest report date")
     latest_date: datetime | None = Field(None, description="Latest report date")
     disease_totals: list[DiseaseTotalItem] = Field(default_factory=list, description="National totals for each disease")
+    source_breakdown: dict[str, DataSourceBreakdown] = Field(default_factory=dict, description="Breakdown by data source")
 
 
 class NationalDiseaseTimeSeriesDataPoint(BaseModel):

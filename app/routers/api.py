@@ -47,15 +47,18 @@ async def health_check():
 
 
 @router.get("/diseases", response_model=DiseaseListResponse)
-async def list_diseases():
+async def list_diseases(data_source: str | None = None):
     """
     Get list of all diseases tracked in the database.
+
+    Args:
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
 
     Returns:
         List of disease names
     """
     try:
-        diseases = db.get_diseases()
+        diseases = db.get_diseases(data_source=data_source)
         return DiseaseListResponse(
             diseases=[DiseaseListItem(name=d) for d in diseases],
             count=len(diseases)
@@ -66,15 +69,18 @@ async def list_diseases():
 
 
 @router.get("/stats", response_model=SummaryStatsResponse)
-async def get_summary_stats():
+async def get_summary_stats(data_source: str | None = None):
     """
     Get summary statistics across all disease data.
+
+    Args:
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
 
     Returns:
         Summary statistics including total cases, date ranges, etc.
     """
     try:
-        stats = db.get_summary_stats()
+        stats = db.get_summary_stats(data_source=data_source)
         return SummaryStatsResponse(**stats)
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
@@ -82,25 +88,27 @@ async def get_summary_stats():
 
 
 @router.get("/timeseries/national/{disease_name}", response_model=NationalDiseaseTimeSeriesResponse)
-async def get_national_disease_timeseries(disease_name: str, granularity: str = 'month'):
+async def get_national_disease_timeseries(disease_name: str, granularity: str = 'month',
+                                         data_source: str | None = None):
     """
     Get national time series data for a specific disease.
 
     Args:
         disease_name: Name of the disease
         granularity: Time granularity ('month' or 'week'), defaults to 'month'
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
 
     Returns:
         Time series data points with period and total national cases
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases()
+        diseases = db.get_diseases(data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get time series data
-        data = db.get_national_disease_timeseries(disease_name, granularity)
+        data = db.get_national_disease_timeseries(disease_name, granularity, data_source=data_source)
 
         return NationalDiseaseTimeSeriesResponse(
             disease_name=disease_name,
@@ -115,25 +123,27 @@ async def get_national_disease_timeseries(disease_name: str, granularity: str = 
 
 
 @router.get("/timeseries/states/{disease_name}", response_model=DiseaseTimeSeriesByStateResponse)
-async def get_disease_timeseries_by_state(disease_name: str, granularity: str = 'month'):
+async def get_disease_timeseries_by_state(disease_name: str, granularity: str = 'month',
+                                         data_source: str | None = None):
     """
     Get state-level time series data for a specific disease.
 
     Args:
         disease_name: Name of the disease
         granularity: Time granularity ('month' or 'week'), defaults to 'month'
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
 
     Returns:
         Time series data broken down by state plus national total
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases()
+        diseases = db.get_diseases(data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get time series data
-        data = db.get_disease_timeseries_by_state(disease_name, granularity)
+        data = db.get_disease_timeseries_by_state(disease_name, granularity, data_source=data_source)
 
         # Convert states data to proper format
         states_formatted = {}
@@ -158,24 +168,25 @@ async def get_disease_timeseries_by_state(disease_name: str, granularity: str = 
 
 
 @router.get("/disease/{disease_name}/stats", response_model=DiseaseStatsResponse)
-async def get_disease_stats(disease_name: str):
+async def get_disease_stats(disease_name: str, data_source: str | None = None):
     """
     Get summary statistics for a specific disease.
 
     Args:
         disease_name: Name of the disease
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
 
     Returns:
         Disease-specific statistics including total cases, affected regions, and recent trends
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases()
+        diseases = db.get_diseases(data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get disease stats
-        stats = db.get_disease_stats(disease_name)
+        stats = db.get_disease_stats(disease_name, data_source=data_source)
 
         return DiseaseStatsResponse(
             disease_name=disease_name,
@@ -192,24 +203,26 @@ async def get_disease_stats(disease_name: str):
 
 
 @router.get("/disease/{disease_name}/age-groups", response_model=AgeGroupDistributionResponse)
-async def get_age_group_distribution(disease_name: str):
+async def get_age_group_distribution(disease_name: str, data_source: str | None = None):
     """
     Get age group distribution by state for a specific disease.
 
     Args:
         disease_name: Name of the disease
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
 
     Returns:
         Age group distribution with percentages for each state
+        Note: NNDSS data does not include age group information
     """
     try:
         # Verify disease exists
-        diseases = db.get_diseases()
+        diseases = db.get_diseases(data_source=data_source)
         if disease_name not in diseases:
             raise HTTPException(status_code=404, detail=f"Disease '{disease_name}' not found")
 
         # Get age group distribution
-        data = db.get_age_group_distribution_by_state(disease_name)
+        data = db.get_age_group_distribution_by_state(disease_name, data_source=data_source)
 
         # Convert to proper format
         states_formatted = {}

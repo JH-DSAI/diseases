@@ -35,11 +35,15 @@ async def lifespan(app: FastAPI):
     try:
         db.connect()
         db.load_csv_files()
+        db.load_nndss_csv()
         logger.info("Database initialized successfully")
 
         # Log summary stats
         stats = db.get_summary_stats()
-        logger.info(f"Loaded {stats.get('total_records', 0)} records from {stats.get('total_states', 0)} states")
+        source_breakdown = stats.get('source_breakdown', {})
+        logger.info(f"Loaded {stats.get('total_records', 0)} total records from {stats.get('total_states', 0)} states")
+        for source, counts in source_breakdown.items():
+            logger.info(f"  - {source}: {counts.get('records', 0)} records, {counts.get('cases', 0)} cases")
 
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")

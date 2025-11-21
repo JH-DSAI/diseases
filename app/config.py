@@ -19,7 +19,8 @@ class Settings(BaseSettings):
 
     # Database
     data_directory: Path = Path(__file__).parent.parent / "us_disease_tracker_data"
-    database_path: str = ":memory:"  # In-memory DuckDB
+    nndss_data_directory: Path = Path(__file__).parent.parent / "nndss_data"
+    database_path: str = "disease_dashboard.duckdb"  # Persistent DuckDB file
 
     # Server
     host: str = "0.0.0.0"
