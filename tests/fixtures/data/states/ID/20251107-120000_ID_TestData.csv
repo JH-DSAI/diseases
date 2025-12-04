@@ -1,0 +1,7 @@
+report_period_start,report_period_end,date_type,time_unit,disease_name,disease_subtype,state,reporting_jurisdiction,geo_name,geo_unit,age_group,confirmation_status,outcome,count
+2025-08-03,2025-08-09,cccd,week,measles,NA,ID,ID,ID,state,1-4 y,confirmed,cases,5
+2025-08-03,2025-08-09,cccd,week,measles,NA,ID,ID,ID,state,5-11 y,confirmed,cases,3
+2025-08-10,2025-08-16,cccd,week,measles,NA,ID,ID,ID,state,12-17 y,confirmed,cases,2
+2025-08-10,2025-08-16,cccd,week,pertussis,NA,ID,ID,ID,state,0-1 y,confirmed,cases,8
+2025-08-17,2025-08-23,cccd,week,pertussis,NA,ID,ID,ID,state,1-4 y,confirmed,cases,12
+2025-08-17,2025-08-23,cccd,week,pertussis,NA,ID,ID,ID,state,5-11 y,confirmed,cases,6

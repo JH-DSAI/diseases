@@ -13,7 +13,7 @@ import pandas as pd
 
 from app.etl.base import DataSourceTransformer
 from app.etl.normalizers.disease_names import normalize_nndss_disease_name
-from app.etl.normalizers.geo import STATE_CODES, REGIONS, classify_geo_unit
+from app.etl.normalizers.geo import STATE_CODES, classify_geo_unit
 
 logger = logging.getLogger(__name__)
 
@@ -164,12 +164,7 @@ class NNDSSTransformer(DataSourceTransformer):
         df = df.copy()
 
         # Compute dates for unique (year, week) combinations, then merge back
-        unique_weeks = (
-            df[["Current MMWR Year", "MMWR WEEK"]]
-            .drop_duplicates()
-            .dropna()
-            .copy()
-        )
+        unique_weeks = df[["Current MMWR Year", "MMWR WEEK"]].drop_duplicates().dropna().copy()
 
         starts = []
         ends = []
@@ -189,11 +184,7 @@ class NNDSSTransformer(DataSourceTransformer):
         unique_weeks["report_period_end"] = ends
 
         # Merge back to original dataframe
-        df = df.merge(
-            unique_weeks,
-            on=["Current MMWR Year", "MMWR WEEK"],
-            how="left"
-        )
+        df = df.merge(unique_weeks, on=["Current MMWR Year", "MMWR WEEK"], how="left")
 
         return df
 

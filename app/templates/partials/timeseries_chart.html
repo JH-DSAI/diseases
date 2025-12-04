@@ -1,54 +1,54 @@
 {# Time series chart by state - data embedded in response #}
 
-{# Embed chart data as JSON for JavaScript to parse #}
 <script type="application/json" id="timeseries-data">{{ chart_data | tojson }}</script>
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-        <div class="mb-4">
-            <h3 class="card-title">Cases Over Time by State</h3>
-        </div>
+        <h3 class="card-title mb-4">Cases Over Time by State</h3>
 
-        {# State Filter - Alpine.js handles the checkbox UI state #}
-        <div class="mb-4"
-             x-data="{
-                availableStates: [],
-                selectedStates: [],
-                chartData: null,
-                init() {
-                    const dataEl = document.getElementById('timeseries-data');
-                    if (dataEl) {
-                        this.chartData = JSON.parse(dataEl.textContent);
-                        this.availableStates = this.chartData.available_states || [];
-                        this.selectedStates = [...this.availableStates];
-                        this.$nextTick(() => this.renderChart());
-                    }
-                },
-                renderChart() {
-                    if (this.chartData && typeof createDiseaseStateTrendChart === 'function') {
-                        createDiseaseStateTrendChart(
-                            'diseaseStateTrendChart',
-                            this.chartData,
-                            '{{ disease_name }}',
-                            this.selectedStates
-                        );
-                    }
-                }
-             }"
-             x-effect="renderChart()">
+        <div x-data="timeseriesFilter('{{ disease_name }}')" x-init="init()" x-effect="renderChart()">
             <h4 class="text-sm font-medium mb-3">Select states to display (national total shown by default)</h4>
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-wrap gap-2 mb-4">
                 <template x-for="state in availableStates" :key="state">
-                    <input type="checkbox"
-                           :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
-                           :aria-label="state"
-                           :value="state"
-                           x-model="selectedStates">
+                    <button
+                        :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
+                        @click="toggleState(state)"
+                        x-text="state">
+                    </button>
                 </template>
             </div>
+            <div x-ref="chart" class="w-full" style="min-height: 450px;"></div>
         </div>
-
-        {# Chart Container #}
-        <div id="diseaseStateTrendChart" class="w-full" style="min-height: 450px;"></div>
     </div>
 </div>
+
+<script>
+function timeseriesFilter(diseaseName) {
+    return {
+        availableStates: [],
+        selectedStates: [],
+        chartData: null,
+        init() {
+            const dataEl = document.getElementById('timeseries-data');
+            if (dataEl) {
+                this.chartData = JSON.parse(dataEl.textContent);
+                this.availableStates = this.chartData.available_states || [];
+                this.selectedStates = [...this.availableStates];
+            }
+        },
+        toggleState(state) {
+            if (this.selectedStates.includes(state)) {
+                this.selectedStates = this.selectedStates.filter(s => s !== state);
+            } else {
+                this.selectedStates = [...this.selectedStates, state];
+            }
+        },
+        renderChart() {
+            if (this.chartData && this.$refs.chart) {
+                const svg = createStateTrendChart(this.chartData, diseaseName, this.selectedStates);
+                this.$refs.chart.replaceChildren(svg);
+            }
+        }
+    }
+}
+</script>

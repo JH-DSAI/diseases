@@ -131,7 +131,9 @@ class DiseaseDatabase:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_disease_name ON disease_data(disease_name)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_disease_slug ON disease_data(disease_slug)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_state ON disease_data(state)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_period ON disease_data(report_period_start)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_report_period ON disease_data(report_period_start)"
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_data_source ON disease_data(data_source)")
         logger.info("Created database indexes")
 
@@ -151,7 +153,7 @@ class DiseaseDatabase:
         for tracker_name, nndss_name in TRACKER_TO_NNDSS.items():
             conn.execute(
                 "INSERT INTO disease_name_mapping (tracker_name, nndss_name) VALUES (?, ?)",
-                [tracker_name, nndss_name]
+                [tracker_name, nndss_name],
             )
 
         mapping_count = conn.execute("SELECT COUNT(*) FROM disease_name_mapping").fetchone()[0]
@@ -170,12 +172,15 @@ class DiseaseDatabase:
 
         with self._lock:
             if data_source:
-                result = self.conn.execute("""
+                result = self.conn.execute(
+                    """
                     SELECT DISTINCT disease_name
                     FROM disease_data
                     WHERE data_source = ?
                     ORDER BY disease_name
-                """, [data_source]).fetchall()
+                """,
+                    [data_source],
+                ).fetchall()
             else:
                 result = self.conn.execute("""
                     SELECT DISTINCT disease_name
@@ -192,12 +197,15 @@ class DiseaseDatabase:
 
         with self._lock:
             if data_source:
-                result = self.conn.execute("""
+                result = self.conn.execute(
+                    """
                     SELECT DISTINCT disease_name, disease_slug
                     FROM disease_data
                     WHERE data_source = ?
                     ORDER BY disease_name
-                """, [data_source]).fetchall()
+                """,
+                    [data_source],
+                ).fetchall()
             else:
                 result = self.conn.execute("""
                     SELECT DISTINCT disease_name, disease_slug
@@ -213,12 +221,15 @@ class DiseaseDatabase:
             return None
 
         with self._lock:
-            result = self.conn.execute("""
+            result = self.conn.execute(
+                """
                 SELECT DISTINCT disease_name
                 FROM disease_data
                 WHERE disease_slug = ?
                 LIMIT 1
-            """, [slug]).fetchone()
+            """,
+                [slug],
+            ).fetchone()
 
             return result[0] if result else None
 
@@ -229,12 +240,15 @@ class DiseaseDatabase:
 
         with self._lock:
             if data_source:
-                result = self.conn.execute("""
+                result = self.conn.execute(
+                    """
                     SELECT DISTINCT state
                     FROM disease_data
                     WHERE data_source = ?
                     ORDER BY state
-                """, [data_source]).fetchall()
+                """,
+                    [data_source],
+                ).fetchall()
             else:
                 result = self.conn.execute("""
                     SELECT DISTINCT state
@@ -251,7 +265,8 @@ class DiseaseDatabase:
 
         with self._lock:
             if data_source:
-                stats = self.conn.execute("""
+                stats = self.conn.execute(
+                    """
                     SELECT
                         COUNT(*) as total_records,
                         COUNT(DISTINCT disease_name) as total_diseases,
@@ -261,7 +276,9 @@ class DiseaseDatabase:
                         MAX(report_period_end) as latest_date
                     FROM disease_data
                     WHERE data_source = ?
-                """, [data_source]).fetchone()
+                """,
+                    [data_source],
+                ).fetchone()
             else:
                 stats = self.conn.execute("""
                     SELECT
@@ -291,7 +308,9 @@ class DiseaseDatabase:
                 "earliest_date": stats[4],
                 "latest_date": stats[5],
                 "disease_totals": self.get_disease_totals(data_source),
-                "source_breakdown": {row[0]: {"records": row[1], "cases": row[2]} for row in source_breakdown}
+                "source_breakdown": {
+                    row[0]: {"records": row[1], "cases": row[2]} for row in source_breakdown
+                },
             }
 
     def get_disease_totals(self, data_source: str | None = None) -> list[dict]:
@@ -301,13 +320,16 @@ class DiseaseDatabase:
 
         with self._lock:
             if data_source:
-                result = self.conn.execute("""
+                result = self.conn.execute(
+                    """
                     SELECT disease_name, SUM(count) as total_cases
                     FROM disease_data
                     WHERE data_source = ?
                     GROUP BY disease_name
                     ORDER BY disease_name
-                """, [data_source]).fetchall()
+                """,
+                    [data_source],
+                ).fetchall()
             else:
                 result = self.conn.execute("""
                     SELECT disease_name, SUM(count) as total_cases
@@ -316,10 +338,14 @@ class DiseaseDatabase:
                     ORDER BY disease_name
                 """).fetchall()
 
-            return [{"disease_name": row[0], "total_cases": int(row[1]) if row[1] else 0} for row in result]
+            return [
+                {"disease_name": row[0], "total_cases": int(row[1]) if row[1] else 0}
+                for row in result
+            ]
 
-    def get_national_disease_timeseries(self, disease_name: str, granularity: str = "month",
-                                        data_source: str | None = None) -> list[dict]:
+    def get_national_disease_timeseries(
+        self, disease_name: str, granularity: str = "month", data_source: str | None = None
+    ) -> list[dict]:
         """Get time series data for a disease aggregated nationally."""
         if not self._initialized:
             return []
@@ -351,7 +377,10 @@ class DiseaseDatabase:
                 """
                 result = self.conn.execute(query, [disease_name]).fetchall()
 
-            return [{"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0} for row in result]
+            return [
+                {"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0}
+                for row in result
+            ]
 
     def get_disease_stats(self, disease_name: str, data_source: str | None = None) -> dict:
         """Get summary statistics for a specific disease."""
@@ -359,27 +388,43 @@ class DiseaseDatabase:
             return {}
 
         with self._lock:
-            where_clause = "WHERE disease_name = ?" if not data_source else "WHERE disease_name = ? AND data_source = ?"
+            where_clause = (
+                "WHERE disease_name = ?"
+                if not data_source
+                else "WHERE disease_name = ? AND data_source = ?"
+            )
             params = [disease_name] if not data_source else [disease_name, data_source]
 
-            total_cases_result = self.conn.execute(f"""
+            total_cases_result = self.conn.execute(
+                f"""
                 SELECT SUM(count) as total_cases FROM disease_data {where_clause}
-            """, params).fetchone()
+            """,
+                params,
+            ).fetchone()
             total_cases = int(total_cases_result[0]) if total_cases_result[0] else 0
 
-            affected_states_result = self.conn.execute(f"""
+            affected_states_result = self.conn.execute(
+                f"""
                 SELECT COUNT(DISTINCT state) as affected_states FROM disease_data {where_clause}
-            """, params).fetchone()
+            """,
+                params,
+            ).fetchone()
             affected_states = int(affected_states_result[0]) if affected_states_result[0] else 0
 
-            affected_counties_result = self.conn.execute(f"""
+            affected_counties_result = self.conn.execute(
+                f"""
                 SELECT COUNT(DISTINCT geo_name) as affected_counties
                 FROM disease_data
                 {where_clause} AND geo_name IS NOT NULL AND geo_name != ''
-            """, params).fetchone()
-            affected_counties = int(affected_counties_result[0]) if affected_counties_result[0] else 0
+            """,
+                params,
+            ).fetchone()
+            affected_counties = (
+                int(affected_counties_result[0]) if affected_counties_result[0] else 0
+            )
 
-            latest_two_week_result = self.conn.execute(f"""
+            latest_two_week_result = self.conn.execute(
+                f"""
                 WITH latest_date AS (
                     SELECT MAX(report_period_end) as max_date FROM disease_data {where_clause}
                 )
@@ -388,32 +433,43 @@ class DiseaseDatabase:
                 {where_clause}
                   AND report_period_end >= (SELECT max_date - INTERVAL 14 DAYS FROM latest_date)
                   AND report_period_end <= (SELECT max_date FROM latest_date)
-            """, params + params).fetchone()
+            """,
+                params + params,
+            ).fetchone()
             two_week_cases = int(latest_two_week_result[0]) if latest_two_week_result[0] else 0
 
             return {
                 "total_cases": total_cases,
                 "affected_states": affected_states,
                 "affected_counties": affected_counties,
-                "two_week_cases": two_week_cases
+                "two_week_cases": two_week_cases,
             }
 
-    def get_age_group_distribution_by_state(self, disease_name: str,
-                                            data_source: str | None = None) -> dict:
+    def get_age_group_distribution_by_state(
+        self, disease_name: str, data_source: str | None = None
+    ) -> dict:
         """Get age group distribution by state for a disease."""
         if not self._initialized:
             return {"states": {}, "age_groups": [], "available_states": []}
 
         with self._lock:
-            where_clause = "WHERE disease_name = ?" if not data_source else "WHERE disease_name = ? AND data_source = ?"
+            where_clause = (
+                "WHERE disease_name = ?"
+                if not data_source
+                else "WHERE disease_name = ? AND data_source = ?"
+            )
             params = [disease_name] if not data_source else [disease_name, data_source]
 
-            states_result = self.conn.execute(f"""
+            states_result = self.conn.execute(
+                f"""
                 SELECT DISTINCT state FROM disease_data {where_clause} ORDER BY state
-            """, params).fetchall()
+            """,
+                params,
+            ).fetchall()
             available_states = [row[0] for row in states_result]
 
-            age_group_result = self.conn.execute(f"""
+            age_group_result = self.conn.execute(
+                f"""
                 SELECT state, age_group, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
@@ -421,15 +477,20 @@ class DiseaseDatabase:
                   AND LOWER(age_group) NOT LIKE '%total%'
                 GROUP BY state, age_group
                 ORDER BY state, age_group
-            """, params).fetchall()
+            """,
+                params,
+            ).fetchall()
 
-            age_groups_result = self.conn.execute(f"""
+            age_groups_result = self.conn.execute(
+                f"""
                 SELECT DISTINCT age_group FROM disease_data
                 {where_clause}
                   AND age_group IS NOT NULL AND age_group != ''
                   AND LOWER(age_group) NOT LIKE '%total%'
                 ORDER BY age_group
-            """, params).fetchall()
+            """,
+                params,
+            ).fetchall()
             age_groups = [row[0] for row in age_groups_result]
 
             states_data = {}
@@ -448,7 +509,7 @@ class DiseaseDatabase:
                     percentage = (count / state_total * 100) if state_total > 0 else 0
                     state_age_percentages[age_group] = {
                         "count": count,
-                        "percentage": round(percentage, 2)
+                        "percentage": round(percentage, 2),
                     }
 
                 states_data[state] = state_age_percentages
@@ -456,11 +517,12 @@ class DiseaseDatabase:
             return {
                 "states": states_data,
                 "age_groups": age_groups,
-                "available_states": available_states
+                "available_states": available_states,
             }
 
-    def get_disease_timeseries_by_state(self, disease_name: str, granularity: str = "month",
-                                        data_source: str | None = None) -> dict:
+    def get_disease_timeseries_by_state(
+        self, disease_name: str, granularity: str = "month", data_source: str | None = None
+    ) -> dict:
         """Get time series data for a disease broken down by state."""
         if not self._initialized:
             return {"states": {}, "national": [], "available_states": []}
@@ -469,45 +531,60 @@ class DiseaseDatabase:
             granularity = "month"
 
         with self._lock:
-            where_clause = "WHERE disease_name = ?" if not data_source else "WHERE disease_name = ? AND data_source = ?"
+            where_clause = (
+                "WHERE disease_name = ?"
+                if not data_source
+                else "WHERE disease_name = ? AND data_source = ?"
+            )
             params = [disease_name] if not data_source else [disease_name, data_source]
 
-            states_result = self.conn.execute(f"""
+            states_result = self.conn.execute(
+                f"""
                 SELECT DISTINCT state FROM disease_data {where_clause} ORDER BY state
-            """, params).fetchall()
+            """,
+                params,
+            ).fetchall()
             available_states = [row[0] for row in states_result]
 
-            state_result = self.conn.execute(f"""
+            state_result = self.conn.execute(
+                f"""
                 SELECT state, DATE_TRUNC('{granularity}', report_period_start) as period, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
                 GROUP BY state, DATE_TRUNC('{granularity}', report_period_start)
                 ORDER BY state, period ASC
-            """, params).fetchall()
+            """,
+                params,
+            ).fetchall()
 
             states_data = {}
             for row in state_result:
                 state, period, cases = row
                 if state not in states_data:
                     states_data[state] = []
-                states_data[state].append({
-                    "period": str(period),
-                    "cases": int(cases) if cases else 0
-                })
+                states_data[state].append(
+                    {"period": str(period), "cases": int(cases) if cases else 0}
+                )
 
-            national_result = self.conn.execute(f"""
+            national_result = self.conn.execute(
+                f"""
                 SELECT DATE_TRUNC('{granularity}', report_period_start) as period, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
                 GROUP BY DATE_TRUNC('{granularity}', report_period_start)
                 ORDER BY period ASC
-            """, params).fetchall()
-            national_data = [{"period": str(row[0]), "cases": int(row[1]) if row[1] else 0} for row in national_result]
+            """,
+                params,
+            ).fetchall()
+            national_data = [
+                {"period": str(row[0]), "cases": int(row[1]) if row[1] else 0}
+                for row in national_result
+            ]
 
             return {
                 "states": states_data,
                 "national": national_data,
-                "available_states": available_states
+                "available_states": available_states,
             }
 
     def close(self):
