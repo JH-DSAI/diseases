@@ -17,73 +17,26 @@
 </article>
 
 <!-- Tracked Diseases -->
-{% if diseases %}
 <div class="mb-8">
     <h2 class="text-3xl font-bold mb-6">Tracked Diseases</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for disease in diseases %}
-        <a href="/disease/{{ disease }}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer"
-             x-data="{ chartData: null, error: null, cumulativeTotal: null }"
-             x-init="// Fetch timeseries data
-                     fetch('/api/timeseries/national/{{ disease }}', {
-                         headers: {
-                             'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
-                         }
-                     })
-                     .then(r => {
-                         if (!r.ok) {
-                             throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-                         }
-                         return r.json();
-                     })
-                     .then(data => {
-                         console.log('Timeseries data for {{ disease }}:', data);
-                         chartData = data;
-                         if (data && data.data) {
-                             createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', data.data, data.disease_name);
-                         } else {
-                             createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', [], '{{ disease }}');
-                         }
-                     })
-                     .catch(err => {
-                         console.error('Failed to fetch timeseries for {{ disease }}:', err);
-                         error = err.message;
-                         createNationalDiseaseTrendChart('chart-{{ disease | replace(' ', '-') }}', [], '{{ disease }}');
-                     });
-
-                     // Fetch cumulative total
-                     fetch('/api/stats', {
-                         headers: {
-                             'Authorization': 'Bearer ' + (localStorage.getItem('api_key') || '')
-                         }
-                     })
-                     .then(r => r.json())
-                     .then(data => {
-                         if (data.disease_totals) {
-                             const diseaseData = data.disease_totals.find(d => d.disease_name === '{{ disease }}');
-                             if (diseaseData) {
-                                 cumulativeTotal = diseaseData.total_cases;
-                             }
-                         }
-                     })
-                     .catch(err => console.error('Failed to fetch stats for {{ disease }}:', err))">
-            <div class="card-body">
-                <h3 class="card-title capitalize">{{ disease }}</h3>
-                <div id="chart-{{ disease | replace(' ', '-') }}" class="w-full" style="min-height: 205px;">
-                    <div class="flex items-center justify-center h-48">
-                        <span class="loading loading-spinner loading-md"></span>
-                    </div>
-                </div>
-                <div class="mt-4 text-center">
-                    <div class="text-sm text-base-content/70">Cumulative Total</div>
-                    <div class="text-2xl font-bold text-primary" x-text="cumulativeTotal ? cumulativeTotal.toLocaleString() : '-'">-</div>
+    <!-- HTMX loads disease cards from /api/html/diseases -->
+    <div hx-get="/api/html/diseases"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <!-- Loading skeleton -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for _ in range(6) %}
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <div class="skeleton h-6 w-32 mb-4"></div>
+                    <div class="skeleton h-48 w-full"></div>
+                    <div class="skeleton h-8 w-24 mx-auto mt-4"></div>
                 </div>
             </div>
-        </a>
-        {% endfor %}
+            {% endfor %}
+        </div>
     </div>
 </div>
-{% endif %}
 
 <!-- About Section -->
 <div class="mt-12 prose lg:prose-xl">
