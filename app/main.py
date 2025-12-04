@@ -4,13 +4,13 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.database import db
-from app.routers import api, pages
+from app.routers import api, html_api, pages
 
 # Configure logging
 logging.basicConfig(
@@ -34,12 +34,15 @@ async def lifespan(app: FastAPI):
     # Initialize database and load data
     try:
         db.connect()
-        db.load_csv_files()
+        db.load_all_sources()
         logger.info("Database initialized successfully")
 
         # Log summary stats
         stats = db.get_summary_stats()
-        logger.info(f"Loaded {stats.get('total_records', 0)} records from {stats.get('total_states', 0)} states")
+        source_breakdown = stats.get('source_breakdown', {})
+        logger.info(f"Loaded {stats.get('total_records', 0)} total records from {stats.get('total_states', 0)} states")
+        for source, counts in source_breakdown.items():
+            logger.info(f"  - {source}: {counts.get('records', 0)} records, {counts.get('cases', 0)} cases")
 
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -124,6 +127,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Include routers
 app.include_router(api.router)
+app.include_router(html_api.router)
 app.include_router(pages.router)
 
 

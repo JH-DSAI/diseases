@@ -2,7 +2,7 @@
 
 # Run development server
 dev:
-    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    uv run uvicorn app.main:app --reload --reload-exclude '*.duckdb' --host 0.0.0.0 --port 8000
 
 # Run tests
 test:
