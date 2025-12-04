@@ -63,10 +63,7 @@ class TrackerTransformer(DataSourceTransformer):
         all_data = []
         for csv_file in csv_files:
             try:
-                df = pd.read_csv(
-                    csv_file,
-                    parse_dates=["report_period_start", "report_period_end"]
-                )
+                df = pd.read_csv(csv_file, parse_dates=["report_period_start", "report_period_end"])
                 logger.info(f"Loaded {csv_file.name}: {len(df)} rows")
                 all_data.append(df)
             except Exception as e:

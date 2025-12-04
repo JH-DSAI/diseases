@@ -7,8 +7,8 @@ To add a new data source, import its transformer and add it to TRANSFORMERS.
 
 from typing import TYPE_CHECKING
 
-from app.etl.transformers.tracker import TrackerTransformer
 from app.etl.transformers.nndss import NNDSSTransformer
+from app.etl.transformers.tracker import TrackerTransformer
 
 if TYPE_CHECKING:
     from app.etl.base import DataSourceTransformer
@@ -36,9 +36,7 @@ def get_transformer(name: str) -> type["DataSourceTransformer"]:
     """
     if name not in TRANSFORMERS:
         available = ", ".join(sorted(TRANSFORMERS.keys()))
-        raise ValueError(
-            f"Unknown data source: '{name}'. Available sources: {available}"
-        )
+        raise ValueError(f"Unknown data source: '{name}'. Available sources: {available}")
     return TRANSFORMERS[name]
 
 

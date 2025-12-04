@@ -9,6 +9,7 @@ consistent naming across data sources. It consolidates mappings from:
 """
 
 import re
+
 import pandas as pd
 
 # Mapping from tracker disease names to NNDSS standard names

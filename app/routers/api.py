@@ -2,9 +2,8 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.auth import verify_api_key
 from app.config import settings
 from app.database import db
 from app.dependencies import get_disease_name_or_404, run_db_query
@@ -15,7 +14,6 @@ from app.models import (
     DiseaseListResponse,
     DiseaseStatsResponse,
     DiseaseTimeSeriesByStateResponse,
-    DiseaseTotalItem,
     HealthResponse,
     NationalDiseaseTimeSeriesDataPoint,
     NationalDiseaseTimeSeriesResponse,
@@ -28,7 +26,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/data",
     tags=["data-api"],
-    dependencies=[Depends(verify_api_key)]
 )
 
 
@@ -41,9 +38,7 @@ async def health_check():
         Service status and version information
     """
     return HealthResponse(
-        status="healthy",
-        version=settings.app_version,
-        database_initialized=db.is_initialized()
+        status="healthy", version=settings.app_version, database_initialized=db.is_initialized()
     )
 
 
@@ -62,7 +57,7 @@ async def list_diseases(data_source: str | None = None):
         diseases = await run_db_query(db.get_diseases_with_slugs, data_source=data_source)
         return DiseaseListResponse(
             diseases=[DiseaseListItem(name=d["name"], slug=d["slug"]) for d in diseases],
-            count=len(diseases)
+            count=len(diseases),
         )
     except Exception as e:
         logger.error(f"Error fetching diseases: {e}")
@@ -89,8 +84,9 @@ async def get_summary_stats(data_source: str | None = None):
 
 
 @router.get("/timeseries/national/{disease_slug}", response_model=NationalDiseaseTimeSeriesResponse)
-async def get_national_disease_timeseries(disease_slug: str, granularity: str = 'month',
-                                         data_source: str | None = None):
+async def get_national_disease_timeseries(
+    disease_slug: str, granularity: str = "month", data_source: str | None = None
+):
     """
     Get national time series data for a specific disease.
 
@@ -104,13 +100,15 @@ async def get_national_disease_timeseries(disease_slug: str, granularity: str = 
     """
     try:
         disease_name = await get_disease_name_or_404(disease_slug)
-        data = await run_db_query(db.get_national_disease_timeseries, disease_name, granularity, data_source=data_source)
+        data = await run_db_query(
+            db.get_national_disease_timeseries, disease_name, granularity, data_source=data_source
+        )
 
         return NationalDiseaseTimeSeriesResponse(
             disease_name=disease_name,
             disease_slug=disease_slug,
             granularity=granularity,
-            data=[NationalDiseaseTimeSeriesDataPoint(**point) for point in data]
+            data=[NationalDiseaseTimeSeriesDataPoint(**point) for point in data],
         )
     except HTTPException:
         raise
@@ -120,8 +118,9 @@ async def get_national_disease_timeseries(disease_slug: str, granularity: str = 
 
 
 @router.get("/timeseries/states/{disease_slug}", response_model=DiseaseTimeSeriesByStateResponse)
-async def get_disease_timeseries_by_state(disease_slug: str, granularity: str = 'month',
-                                         data_source: str | None = None):
+async def get_disease_timeseries_by_state(
+    disease_slug: str, granularity: str = "month", data_source: str | None = None
+):
     """
     Get state-level time series data for a specific disease.
 
@@ -135,7 +134,9 @@ async def get_disease_timeseries_by_state(disease_slug: str, granularity: str = 
     """
     try:
         disease_name = await get_disease_name_or_404(disease_slug)
-        data = await run_db_query(db.get_disease_timeseries_by_state, disease_name, granularity, data_source=data_source)
+        data = await run_db_query(
+            db.get_disease_timeseries_by_state, disease_name, granularity, data_source=data_source
+        )
 
         # Convert states data to proper format
         states_formatted = {}
@@ -151,7 +152,7 @@ async def get_disease_timeseries_by_state(disease_slug: str, granularity: str = 
             granularity=granularity,
             available_states=data["available_states"],
             states=states_formatted,
-            national=national_formatted
+            national=national_formatted,
         )
     except HTTPException:
         raise
@@ -182,7 +183,7 @@ async def get_disease_stats(disease_slug: str, data_source: str | None = None):
             total_cases=stats["total_cases"],
             affected_states=stats["affected_states"],
             affected_counties=stats["affected_counties"],
-            two_week_cases=stats["two_week_cases"]
+            two_week_cases=stats["two_week_cases"],
         )
     except HTTPException:
         raise
@@ -206,14 +207,15 @@ async def get_age_group_distribution(disease_slug: str, data_source: str | None 
     """
     try:
         disease_name = await get_disease_name_or_404(disease_slug)
-        data = await run_db_query(db.get_age_group_distribution_by_state, disease_name, data_source=data_source)
+        data = await run_db_query(
+            db.get_age_group_distribution_by_state, disease_name, data_source=data_source
+        )
 
         # Convert to proper format
         states_formatted = {}
         for state, age_data in data["states"].items():
             states_formatted[state] = {
-                age_group: AgeGroupData(**values)
-                for age_group, values in age_data.items()
+                age_group: AgeGroupData(**values) for age_group, values in age_data.items()
             }
 
         return AgeGroupDistributionResponse(
@@ -221,7 +223,7 @@ async def get_age_group_distribution(disease_slug: str, data_source: str | None 
             disease_slug=disease_slug,
             age_groups=data["age_groups"],
             available_states=data["available_states"],
-            states=states_formatted
+            states=states_formatted,
         )
     except HTTPException:
         raise

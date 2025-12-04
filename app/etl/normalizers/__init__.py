@@ -11,8 +11,8 @@ from app.etl.normalizers.disease_names import (
     normalize_disease_name,
 )
 from app.etl.normalizers.geo import (
-    STATE_CODES,
     REGIONS,
+    STATE_CODES,
     normalize_state_code,
 )
 

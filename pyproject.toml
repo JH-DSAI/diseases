@@ -67,6 +67,12 @@ addopts = [
     "--cov-report=html",
     "--cov-fail-under=70",
 ]
+markers = [
+    "api: JSON API endpoint tests",
+    "html: HTML fragment and page rendering tests",
+    "etl: ETL pipeline tests",
+    "integration: Full integration tests (ETL -> DuckDB -> API)",
+]
 
 [tool.coverage.run]
 source = ["app"]

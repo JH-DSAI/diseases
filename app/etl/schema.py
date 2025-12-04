@@ -6,7 +6,10 @@ conform to after transformation. It serves as the single source of
 truth for the disease_data table structure.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 # Column names in the unified schema (order matters for consistency)
 REQUIRED_COLUMNS = [
@@ -72,7 +75,6 @@ def validate_dataframe(df: "pd.DataFrame") -> list[str]:
     Returns:
         List of validation error messages (empty if valid)
     """
-    import pandas as pd
 
     errors = []
 

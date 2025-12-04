@@ -13,10 +13,6 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
-    # Authentication
-    secret_key: str = "change-me-in-production"
-    api_keys: str = ""  # Comma-separated list in .env
-
     # Database
     data_directory: Path = Path(__file__).parent.parent / "us_disease_tracker_data"
     nndss_data_directory: Path = Path(__file__).parent.parent / "nndss_data"
@@ -26,17 +22,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
-
-    def get_api_keys(self) -> list[str]:
-        """Parse API keys from comma-separated string"""
-        if not self.api_keys:
-            return []
-        return [key.strip() for key in self.api_keys.split(',') if key.strip()]
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 # Global settings instance
