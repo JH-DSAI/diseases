@@ -89,21 +89,6 @@ disease-dashboard/
    uv sync
    ```
 
-3. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   ```
-
-   Edit `.env` and configure:
-   - Generate a secure `SECRET_KEY`
-   - Add your API keys to `API_KEYS` (comma-separated)
-
-4. **Generate an API key** (optional, for production):
-   ```bash
-   python -c "import secrets; print(secrets.token_hex(32))"
-   ```
-   Copy the output and add it to your `.env` file.
-
 ### Running the Application
 
 Install Node.js dependencies first: `npm install`
