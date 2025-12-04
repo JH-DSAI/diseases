@@ -23,11 +23,14 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Run Ruff linter
-        run: uv run ruff check .
+      - name: Run linter
+        run: just lint
 
-      - name: Run Ruff formatter check
+      - name: Check formatting
         run: uv run ruff format --check .

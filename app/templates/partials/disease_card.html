@@ -3,9 +3,11 @@
    class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer">
     <div class="card-body">
         <h3 class="card-title capitalize">{{ disease.name }}</h3>
-        <div id="chart-{{ disease.slug }}" class="w-full" style="min-height: 205px;">
-            <div class="flex items-center justify-center h-48">
-                <span class="loading loading-spinner loading-md"></span>
+        <div x-data="diseaseCard('{{ disease.slug }}', '{{ disease.name }}')" x-init="load()">
+            <div x-ref="chart" class="w-full" style="min-height: 205px;">
+                <div class="flex items-center justify-center h-48">
+                    <span class="loading loading-spinner loading-md"></span>
+                </div>
             </div>
         </div>
         <div class="mt-4 text-center">
@@ -21,25 +23,21 @@
     </div>
 </a>
 <script>
-(function() {
-    // Use API.getHeaders() for auth - falls back to cookie auth if no localStorage key
-    const headers = typeof API !== 'undefined' ? API.getHeaders() : {};
-
-    fetch('/api/data/timeseries/national/{{ disease.slug }}', { headers })
-    .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-    })
-    .then(data => {
-        if (data && data.data) {
-            createNationalDiseaseTrendChart('chart-{{ disease.slug }}', data.data, data.disease_name);
-        } else {
-            createNationalDiseaseTrendChart('chart-{{ disease.slug }}', [], '{{ disease.name }}');
+function diseaseCard(slug, name) {
+    return {
+        async load() {
+            try {
+                const res = await fetch(`/api/data/timeseries/national/${slug}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const svg = createNationalTrendChart(data.data || [], name);
+                this.$refs.chart.replaceChildren(svg);
+            } catch (err) {
+                console.error(`Failed to fetch timeseries for ${slug}:`, err);
+                const svg = createNationalTrendChart([], name);
+                this.$refs.chart.replaceChildren(svg);
+            }
         }
-    })
-    .catch(err => {
-        console.error('Failed to fetch timeseries for {{ disease.slug }}:', err);
-        createNationalDiseaseTrendChart('chart-{{ disease.slug }}', [], '{{ disease.name }}');
-    });
-})();
+    }
+}
 </script>

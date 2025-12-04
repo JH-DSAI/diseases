@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.etl.schema import REQUIRED_COLUMNS, validate_dataframe
 from app.etl.normalizers.disease_names import apply_disease_aliases
+from app.etl.schema import REQUIRED_COLUMNS, validate_dataframe
 from app.utils import to_disease_slug
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,12 @@ class DataSourceTransformer(ABC):
 
         # Step 1: Source-specific loading and transformation
         df = self.transform()
+
+        # Handle empty DataFrames (e.g., missing data directory)
+        if df.empty:
+            logger.warning(f"No data found for {self.get_source_name()}")
+            return df
+
         logger.info(f"Transformed {len(df)} records from {self.get_source_name()}")
 
         # Step 2: Apply disease name aliases
