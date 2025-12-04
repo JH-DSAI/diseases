@@ -1,7 +1,7 @@
 # Disease Dashboard - Just Commands
 
-# Run development server
-dev:
+# Run development server (builds assets first)
+dev: build
     uv run uvicorn app.main:app --reload --reload-exclude '*.duckdb' --host 0.0.0.0 --port 8000
 
 # Run all tests
