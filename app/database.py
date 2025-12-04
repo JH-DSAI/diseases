@@ -1,159 +1,144 @@
-"""DuckDB database connection and data loading"""
+"""DuckDB database connection and data loading.
+
+This module manages the DuckDB database connection and provides query
+interfaces for disease data. Data loading is delegated to the ETL
+transformers for each data source.
+"""
 
 import logging
 import threading
-from pathlib import Path
 
 import duckdb
-import pandas as pd
 
 from app.config import settings
-from app.disease_mappings import TRACKER_TO_NNDSS
-from app.nndss_loader import load_nndss_data
+from app.etl.config import get_transformer, list_sources
+from app.etl.normalizers.disease_names import TRACKER_TO_NNDSS
 
 logger = logging.getLogger(__name__)
 
 
 class DiseaseDatabase:
-    """Manages DuckDB connection and disease data loading"""
+    """Manages DuckDB connection and disease data queries."""
 
     def __init__(self):
         self.conn: duckdb.DuckDBPyConnection | None = None
         self._initialized = False
-        self._lock = threading.RLock()  # Reentrant lock for thread-safe database access
+        self._lock = threading.RLock()
 
     def connect(self) -> duckdb.DuckDBPyConnection:
-        """Establish DuckDB connection"""
+        """Establish DuckDB connection."""
         if self.conn is None:
             self.conn = duckdb.connect(settings.database_path)
             logger.info(f"Connected to DuckDB: {settings.database_path}")
         return self.conn
 
-    def load_csv_files(self) -> None:
-        """Load latest CSV file per state from data directory into DuckDB"""
+    def load_all_sources(self) -> None:
+        """Load data from all configured sources."""
         if self._initialized:
             logger.info("Database already initialized")
             return
 
         conn = self.connect()
-        data_dir = settings.data_directory / "data" / "states"
 
-        if not data_dir.exists():
-            logger.warning(f"Data directory not found: {data_dir}")
-            return
-
-        # Find all CSV files
-        all_csv_files = list(data_dir.rglob("*.csv"))
-        logger.info(f"Found {len(all_csv_files)} total CSV files")
-
-        if not all_csv_files:
-            logger.warning("No CSV files found to load")
-            return
-
-        # Group files by state and select the latest for each
-        # File format: YYYYMMDD-HHMMSS_STATE_UPLOADERNAME.csv
-        from collections import defaultdict
-        files_by_state = defaultdict(list)
-
-        for csv_file in all_csv_files:
-            # Extract state from parent directory name
-            state = csv_file.parent.name
-            files_by_state[state].append(csv_file)
-
-        # Select the latest file for each state (sorted by filename, which includes timestamp)
-        csv_files = []
-        for state, state_files in files_by_state.items():
-            # Sort by filename descending (latest timestamp first)
-            latest_file = sorted(state_files, key=lambda f: f.name, reverse=True)[0]
-            csv_files.append(latest_file)
-            logger.info(f"Selected latest file for {state}: {latest_file.name}")
-
-        logger.info(f"Loading {len(csv_files)} latest files (one per state)")
-
-        # Load each CSV into a temporary list
-        all_data = []
-        for csv_file in csv_files:
-            try:
-                # Parse date columns during CSV loading
-                df = pd.read_csv(csv_file, parse_dates=['report_period_start', 'report_period_end'])
-                logger.info(f"Loaded {csv_file.name}: {len(df)} rows")
-                all_data.append(df)
-            except Exception as e:
-                logger.error(f"Error loading {csv_file}: {e}")
-
-        if not all_data:
-            logger.error("No data loaded from CSV files")
-            return
-
-        # Combine all DataFrames
-        combined_df = pd.concat(all_data, ignore_index=True)
-
-        # Normalize column names (handle both 'reporting_jurisdiction' and 'state' columns)
-        if 'reporting_jurisdiction' in combined_df.columns and 'state' not in combined_df.columns:
-            combined_df['state'] = combined_df['reporting_jurisdiction']
-        elif 'state' in combined_df.columns and 'reporting_jurisdiction' not in combined_df.columns:
-            combined_df['reporting_jurisdiction'] = combined_df['state']
-
-        # Store original disease names before mapping
-        combined_df['original_disease_name'] = combined_df['disease_name']
-
-        # Apply disease name mapping (tracker → NNDSS standard)
-        def map_disease_name(name):
-            """Map tracker disease name to NNDSS standard name"""
-            if pd.isna(name):
-                return name
-            name_lower = str(name).lower()
-            return TRACKER_TO_NNDSS.get(name_lower, name)
-
-        combined_df['disease_name'] = combined_df['disease_name'].apply(map_disease_name)
-
-        # Add data source column
-        combined_df['data_source'] = 'tracker'
-
-        # Ensure consistent column order
-        expected_columns = [
-            'report_period_start', 'report_period_end', 'date_type', 'time_unit',
-            'disease_name', 'disease_subtype', 'reporting_jurisdiction', 'state',
-            'geo_name', 'geo_unit', 'age_group', 'confirmation_status', 'outcome', 'count',
-            'data_source', 'original_disease_name'
-        ]
-
-        # Keep only expected columns that exist
-        available_columns = [col for col in expected_columns if col in combined_df.columns]
-        combined_df = combined_df[available_columns]
-
-        logger.info(f"Combined data: {len(combined_df)} total rows, {len(combined_df.columns)} columns")
-
-        # Create table in DuckDB
+        # Create table with explicit schema to avoid type inference issues
         conn.execute("DROP TABLE IF EXISTS disease_data")
-        conn.register('disease_data_temp', combined_df)
         conn.execute("""
-            CREATE TABLE disease_data AS
-            SELECT * FROM disease_data_temp
+            CREATE TABLE disease_data (
+                report_period_start TIMESTAMP,
+                report_period_end TIMESTAMP,
+                date_type VARCHAR,
+                time_unit VARCHAR,
+                disease_name VARCHAR,
+                disease_slug VARCHAR,
+                disease_subtype VARCHAR,
+                reporting_jurisdiction VARCHAR,
+                state VARCHAR,
+                geo_name VARCHAR,
+                geo_unit VARCHAR,
+                age_group VARCHAR,
+                confirmation_status VARCHAR,
+                outcome VARCHAR,
+                count BIGINT,
+                data_source VARCHAR,
+                original_disease_name VARCHAR
+            )
         """)
 
-        # Create indexes for common queries
-        conn.execute("CREATE INDEX idx_disease_name ON disease_data(disease_name)")
-        conn.execute("CREATE INDEX idx_state ON disease_data(state)")
-        conn.execute("CREATE INDEX idx_report_period ON disease_data(report_period_start)")
-        conn.execute("CREATE INDEX idx_data_source ON disease_data(data_source)")
+        # Load each data source
+        for source_name in list_sources():
+            self._load_source(source_name)
 
-        # Unregister temporary view
-        conn.unregister('disease_data_temp')
+        # Create indexes after all data is loaded
+        self._create_indexes()
 
-        row_count = conn.execute("SELECT COUNT(*) FROM disease_data").fetchone()[0]
-        logger.info(f"Created disease_data table with {row_count} rows (tracker data)")
-
-        # Create disease name mapping table
+        # Create disease name mapping table for reference
         self._create_disease_mapping_table()
 
         self._initialized = True
 
-    def _create_disease_mapping_table(self) -> None:
-        """Create and populate the disease name mapping table"""
+        # Log summary
+        total_count = conn.execute("SELECT COUNT(*) FROM disease_data").fetchone()[0]
+        logger.info(f"Database initialized with {total_count} total records")
+
+    def _load_source(self, source_name: str) -> None:
+        """
+        Load data from a specific source using its transformer.
+
+        Args:
+            source_name: Name of the data source to load
+        """
         conn = self.connect()
 
-        # Create mapping table
+        # Get source path based on source name
+        if source_name == "tracker":
+            source_path = settings.data_directory
+        elif source_name == "nndss":
+            source_path = settings.nndss_data_directory
+        else:
+            logger.warning(f"Unknown source path for: {source_name}")
+            return
+
+        if not source_path.exists():
+            logger.warning(f"Source path not found for {source_name}: {source_path}")
+            return
+
+        try:
+            # Get transformer and load data
+            transformer_cls = get_transformer(source_name)
+            transformer = transformer_cls(source_path)
+            df = transformer.load()
+
+            if df.empty:
+                logger.warning(f"No data loaded from {source_name}")
+                return
+
+            # Insert into database
+            conn.register("temp_data", df)
+            conn.execute("""
+                INSERT INTO disease_data
+                SELECT * FROM temp_data
+            """)
+            conn.unregister("temp_data")
+
+            logger.info(f"Loaded {len(df)} rows from {source_name}")
+
+        except Exception as e:
+            logger.error(f"Error loading {source_name}: {e}", exc_info=True)
+
+    def _create_indexes(self) -> None:
+        """Create indexes for common queries."""
+        conn = self.connect()
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_disease_name ON disease_data(disease_name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_disease_slug ON disease_data(disease_slug)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_state ON disease_data(state)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_period ON disease_data(report_period_start)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_data_source ON disease_data(data_source)")
+        logger.info("Created database indexes")
+
+    def _create_disease_mapping_table(self) -> None:
+        """Create and populate the disease name mapping table for reference."""
+        conn = self.connect()
+
         conn.execute("DROP TABLE IF EXISTS disease_name_mapping")
         conn.execute("""
             CREATE TABLE disease_name_mapping (
@@ -163,7 +148,6 @@ class DiseaseDatabase:
             )
         """)
 
-        # Insert mappings
         for tracker_name, nndss_name in TRACKER_TO_NNDSS.items():
             conn.execute(
                 "INSERT INTO disease_name_mapping (tracker_name, nndss_name) VALUES (?, ?)",
@@ -173,53 +157,14 @@ class DiseaseDatabase:
         mapping_count = conn.execute("SELECT COUNT(*) FROM disease_name_mapping").fetchone()[0]
         logger.info(f"Created disease_name_mapping table with {mapping_count} mappings")
 
-    def load_nndss_csv(self) -> None:
-        """Load NNDSS data from CSV into DuckDB (appends to existing disease_data table)"""
-        conn = self.connect()
+    def is_initialized(self) -> bool:
+        """Check if database has been initialized with data."""
+        return self._initialized
 
-        # Find NNDSS CSV file
-        nndss_dir = settings.nndss_data_directory
-        if not nndss_dir.exists():
-            logger.warning(f"NNDSS data directory not found: {nndss_dir}")
-            return
-
-        # Look for NNDSS CSV files
-        nndss_files = list(nndss_dir.glob("NNDSS_Weekly_Data_*.csv"))
-        if not nndss_files:
-            logger.warning(f"No NNDSS CSV files found in {nndss_dir}")
-            return
-
-        # Use the most recent file (sorted by name)
-        nndss_file = sorted(nndss_files, reverse=True)[0]
-        logger.info(f"Loading NNDSS data from {nndss_file}")
-
-        try:
-            # Load and transform NNDSS data
-            nndss_df = load_nndss_data(nndss_file)
-            logger.info(f"Loaded and transformed {len(nndss_df)} NNDSS records")
-
-            # Append to existing disease_data table
-            conn.register('nndss_data_temp', nndss_df)
-            conn.execute("""
-                INSERT INTO disease_data
-                SELECT * FROM nndss_data_temp
-            """)
-            conn.unregister('nndss_data_temp')
-
-            total_count = conn.execute("SELECT COUNT(*) FROM disease_data").fetchone()[0]
-            nndss_count = conn.execute("SELECT COUNT(*) FROM disease_data WHERE data_source = 'nndss'").fetchone()[0]
-            logger.info(f"Appended NNDSS data: {nndss_count} rows, total table size: {total_count} rows")
-
-        except Exception as e:
-            logger.error(f"Error loading NNDSS data: {e}", exc_info=True)
+    # Query methods
 
     def get_diseases(self, data_source: str | None = None) -> list[str]:
-        """
-        Get list of unique diseases in the database
-
-        Args:
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        """Get list of unique diseases in the database."""
         if not self._initialized:
             return []
 
@@ -240,13 +185,45 @@ class DiseaseDatabase:
 
             return [row[0] for row in result]
 
-    def get_states(self, data_source: str | None = None) -> list[str]:
-        """
-        Get list of unique states in the database
+    def get_diseases_with_slugs(self, data_source: str | None = None) -> list[dict]:
+        """Get list of unique diseases with their slugs."""
+        if not self._initialized:
+            return []
 
-        Args:
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        with self._lock:
+            if data_source:
+                result = self.conn.execute("""
+                    SELECT DISTINCT disease_name, disease_slug
+                    FROM disease_data
+                    WHERE data_source = ?
+                    ORDER BY disease_name
+                """, [data_source]).fetchall()
+            else:
+                result = self.conn.execute("""
+                    SELECT DISTINCT disease_name, disease_slug
+                    FROM disease_data
+                    ORDER BY disease_name
+                """).fetchall()
+
+            return [{"name": row[0], "slug": row[1]} for row in result]
+
+    def get_disease_name_by_slug(self, slug: str) -> str | None:
+        """Look up disease name by its slug."""
+        if not self._initialized:
+            return None
+
+        with self._lock:
+            result = self.conn.execute("""
+                SELECT DISTINCT disease_name
+                FROM disease_data
+                WHERE disease_slug = ?
+                LIMIT 1
+            """, [slug]).fetchone()
+
+            return result[0] if result else None
+
+    def get_states(self, data_source: str | None = None) -> list[str]:
+        """Get list of unique states in the database."""
         if not self._initialized:
             return []
 
@@ -268,12 +245,7 @@ class DiseaseDatabase:
             return [row[0] for row in result]
 
     def get_summary_stats(self, data_source: str | None = None) -> dict:
-        """
-        Get summary statistics across all data
-
-        Args:
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        """Get summary statistics across all data."""
         if not self._initialized:
             return {}
 
@@ -305,7 +277,6 @@ class DiseaseDatabase:
             if not stats:
                 return {}
 
-            # Get breakdown by data source
             source_breakdown = self.conn.execute("""
                 SELECT data_source, COUNT(*) as record_count, SUM(count) as case_count
                 FROM disease_data
@@ -324,21 +295,14 @@ class DiseaseDatabase:
             }
 
     def get_disease_totals(self, data_source: str | None = None) -> list[dict]:
-        """
-        Get total case counts for each disease
-
-        Args:
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        """Get total case counts for each disease."""
         if not self._initialized:
             return []
 
         with self._lock:
             if data_source:
                 result = self.conn.execute("""
-                    SELECT
-                        disease_name,
-                        SUM(count) as total_cases
+                    SELECT disease_name, SUM(count) as total_cases
                     FROM disease_data
                     WHERE data_source = ?
                     GROUP BY disease_name
@@ -346,9 +310,7 @@ class DiseaseDatabase:
                 """, [data_source]).fetchall()
             else:
                 result = self.conn.execute("""
-                    SELECT
-                        disease_name,
-                        SUM(count) as total_cases
+                    SELECT disease_name, SUM(count) as total_cases
                     FROM disease_data
                     GROUP BY disease_name
                     ORDER BY disease_name
@@ -356,26 +318,16 @@ class DiseaseDatabase:
 
             return [{"disease_name": row[0], "total_cases": int(row[1]) if row[1] else 0} for row in result]
 
-    def get_national_disease_timeseries(self, disease_name: str, granularity: str = 'month',
-                                       data_source: str | None = None) -> list[dict]:
-        """
-        Get time series data for a disease aggregated nationally by month or week
-
-        Args:
-            disease_name: Name of the disease
-            granularity: 'month' or 'week'
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+    def get_national_disease_timeseries(self, disease_name: str, granularity: str = "month",
+                                        data_source: str | None = None) -> list[dict]:
+        """Get time series data for a disease aggregated nationally."""
         if not self._initialized:
             return []
 
-        # Validate granularity (must be literal for DATE_TRUNC)
-        if granularity not in ['month', 'week']:
-            granularity = 'month'
+        if granularity not in ["month", "week"]:
+            granularity = "month"
 
         with self._lock:
-            # Build query with granularity as literal (DuckDB requires this)
-            # report_period_start is now a proper TIMESTAMP type from pandas datetime parsing
             if data_source:
                 query = f"""
                     SELECT
@@ -402,13 +354,7 @@ class DiseaseDatabase:
             return [{"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0} for row in result]
 
     def get_disease_stats(self, disease_name: str, data_source: str | None = None) -> dict:
-        """
-        Get summary statistics for a specific disease
-
-        Args:
-            disease_name: Name of the disease
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        """Get summary statistics for a specific disease."""
         if not self._initialized:
             return {}
 
@@ -416,38 +362,26 @@ class DiseaseDatabase:
             where_clause = "WHERE disease_name = ?" if not data_source else "WHERE disease_name = ? AND data_source = ?"
             params = [disease_name] if not data_source else [disease_name, data_source]
 
-            # Total cases
             total_cases_result = self.conn.execute(f"""
-                SELECT SUM(count) as total_cases
-                FROM disease_data
-                {where_clause}
+                SELECT SUM(count) as total_cases FROM disease_data {where_clause}
             """, params).fetchone()
             total_cases = int(total_cases_result[0]) if total_cases_result[0] else 0
 
-            # Affected states/jurisdictions
             affected_states_result = self.conn.execute(f"""
-                SELECT COUNT(DISTINCT state) as affected_states
-                FROM disease_data
-                {where_clause}
+                SELECT COUNT(DISTINCT state) as affected_states FROM disease_data {where_clause}
             """, params).fetchone()
             affected_states = int(affected_states_result[0]) if affected_states_result[0] else 0
 
-            # Affected counties/regions (using geo_name column)
             affected_counties_result = self.conn.execute(f"""
                 SELECT COUNT(DISTINCT geo_name) as affected_counties
                 FROM disease_data
-                {where_clause}
-                  AND geo_name IS NOT NULL
-                  AND geo_name != ''
+                {where_clause} AND geo_name IS NOT NULL AND geo_name != ''
             """, params).fetchone()
             affected_counties = int(affected_counties_result[0]) if affected_counties_result[0] else 0
 
-            # Latest 2-week cases (last 14 days from the most recent date)
             latest_two_week_result = self.conn.execute(f"""
                 WITH latest_date AS (
-                    SELECT MAX(report_period_end) as max_date
-                    FROM disease_data
-                    {where_clause}
+                    SELECT MAX(report_period_end) as max_date FROM disease_data {where_clause}
                 )
                 SELECT SUM(count) as two_week_cases
                 FROM disease_data
@@ -466,72 +400,48 @@ class DiseaseDatabase:
 
     def get_age_group_distribution_by_state(self, disease_name: str,
                                             data_source: str | None = None) -> dict:
-        """
-        Get age group distribution by state for a disease
-
-        Args:
-            disease_name: Name of the disease
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        """Get age group distribution by state for a disease."""
         if not self._initialized:
-            return {"states": {}, "age_groups": []}
+            return {"states": {}, "age_groups": [], "available_states": []}
 
         with self._lock:
             where_clause = "WHERE disease_name = ?" if not data_source else "WHERE disease_name = ? AND data_source = ?"
             params = [disease_name] if not data_source else [disease_name, data_source]
 
-            # Get list of states with data for this disease
-            states_query = f"""
-                SELECT DISTINCT state
-                FROM disease_data
-                {where_clause}
-                ORDER BY state
-            """
-            states_result = self.conn.execute(states_query, params).fetchall()
+            states_result = self.conn.execute(f"""
+                SELECT DISTINCT state FROM disease_data {where_clause} ORDER BY state
+            """, params).fetchall()
             available_states = [row[0] for row in states_result]
 
-            # Get age group data by state (excluding totals)
-            age_group_query = f"""
-                SELECT
-                    state,
-                    age_group,
-                    SUM(count) as total_cases
+            age_group_result = self.conn.execute(f"""
+                SELECT state, age_group, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
-                  AND age_group IS NOT NULL
-                  AND age_group != ''
+                  AND age_group IS NOT NULL AND age_group != ''
                   AND LOWER(age_group) NOT LIKE '%total%'
                 GROUP BY state, age_group
                 ORDER BY state, age_group
-            """
-            age_group_result = self.conn.execute(age_group_query, params).fetchall()
+            """, params).fetchall()
 
-            # Get unique age groups (excluding totals)
-            age_groups_query = f"""
-                SELECT DISTINCT age_group
-                FROM disease_data
+            age_groups_result = self.conn.execute(f"""
+                SELECT DISTINCT age_group FROM disease_data
                 {where_clause}
-                  AND age_group IS NOT NULL
-                  AND age_group != ''
+                  AND age_group IS NOT NULL AND age_group != ''
                   AND LOWER(age_group) NOT LIKE '%total%'
                 ORDER BY age_group
-            """
-            age_groups_result = self.conn.execute(age_groups_query, params).fetchall()
+            """, params).fetchall()
             age_groups = [row[0] for row in age_groups_result]
 
-            # Group by state and calculate percentages
             states_data = {}
             for state in available_states:
                 state_total = 0
                 state_age_counts = {}
 
-                # First pass: get totals
                 for row in age_group_result:
                     if row[0] == state:
                         state_age_counts[row[1]] = int(row[2]) if row[2] else 0
                         state_total += state_age_counts[row[1]]
 
-                # Second pass: calculate percentages
                 state_age_percentages = {}
                 for age_group in age_groups:
                     count = state_age_counts.get(age_group, 0)
@@ -549,51 +459,32 @@ class DiseaseDatabase:
                 "available_states": available_states
             }
 
-    def get_disease_timeseries_by_state(self, disease_name: str, granularity: str = 'month',
+    def get_disease_timeseries_by_state(self, disease_name: str, granularity: str = "month",
                                         data_source: str | None = None) -> dict:
-        """
-        Get time series data for a disease broken down by state with national total
-
-        Args:
-            disease_name: Name of the disease
-            granularity: 'month' or 'week'
-            data_source: Filter by data source ('tracker', 'nndss', or None for all)
-        """
+        """Get time series data for a disease broken down by state."""
         if not self._initialized:
-            return {"states": [], "national": [], "available_states": []}
+            return {"states": {}, "national": [], "available_states": []}
 
-        # Validate granularity (must be literal for DATE_TRUNC)
-        if granularity not in ['month', 'week']:
-            granularity = 'month'
+        if granularity not in ["month", "week"]:
+            granularity = "month"
 
         with self._lock:
             where_clause = "WHERE disease_name = ?" if not data_source else "WHERE disease_name = ? AND data_source = ?"
             params = [disease_name] if not data_source else [disease_name, data_source]
 
-            # Get list of states with data for this disease
-            states_query = f"""
-                SELECT DISTINCT state
-                FROM disease_data
-                {where_clause}
-                ORDER BY state
-            """
-            states_result = self.conn.execute(states_query, params).fetchall()
+            states_result = self.conn.execute(f"""
+                SELECT DISTINCT state FROM disease_data {where_clause} ORDER BY state
+            """, params).fetchall()
             available_states = [row[0] for row in states_result]
 
-            # Get state-level time series
-            state_query = f"""
-                SELECT
-                    state,
-                    DATE_TRUNC('{granularity}', report_period_start) as period,
-                    SUM(count) as total_cases
+            state_result = self.conn.execute(f"""
+                SELECT state, DATE_TRUNC('{granularity}', report_period_start) as period, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
                 GROUP BY state, DATE_TRUNC('{granularity}', report_period_start)
                 ORDER BY state, period ASC
-            """
-            state_result = self.conn.execute(state_query, params).fetchall()
+            """, params).fetchall()
 
-            # Group by state
             states_data = {}
             for row in state_result:
                 state, period, cases = row
@@ -604,17 +495,13 @@ class DiseaseDatabase:
                     "cases": int(cases) if cases else 0
                 })
 
-            # Get national total (same as get_national_disease_timeseries)
-            national_query = f"""
-                SELECT
-                    DATE_TRUNC('{granularity}', report_period_start) as period,
-                    SUM(count) as total_cases
+            national_result = self.conn.execute(f"""
+                SELECT DATE_TRUNC('{granularity}', report_period_start) as period, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
                 GROUP BY DATE_TRUNC('{granularity}', report_period_start)
                 ORDER BY period ASC
-            """
-            national_result = self.conn.execute(national_query, params).fetchall()
+            """, params).fetchall()
             national_data = [{"period": str(row[0]), "cases": int(row[1]) if row[1] else 0} for row in national_result]
 
             return {
@@ -624,7 +511,7 @@ class DiseaseDatabase:
             }
 
     def close(self):
-        """Close database connection"""
+        """Close database connection."""
         if self.conn:
             self.conn.close()
             self.conn = None

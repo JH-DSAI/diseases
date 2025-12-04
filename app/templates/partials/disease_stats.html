@@ -1,0 +1,26 @@
+{# Disease statistics bar - used on disease detail page #}
+<div class="stats stats-vertical lg:stats-horizontal shadow w-full">
+    <div class="stat">
+        <div class="stat-title">Total Cases</div>
+        <div class="stat-value text-primary">{{ "{:,}".format(stats.total_cases) }}</div>
+        <div class="stat-desc">All reported cases</div>
+    </div>
+
+    <div class="stat">
+        <div class="stat-title">Affected Counties/Regions</div>
+        <div class="stat-value text-secondary">{{ "{:,}".format(stats.affected_counties) }}</div>
+        <div class="stat-desc">Geographic areas with cases</div>
+    </div>
+
+    <div class="stat">
+        <div class="stat-title">Affected States/Jurisdictions</div>
+        <div class="stat-value">{{ "{:,}".format(stats.affected_states) }}</div>
+        <div class="stat-desc">States reporting cases</div>
+    </div>
+
+    <div class="stat">
+        <div class="stat-title">Latest 2-Week Cases</div>
+        <div class="stat-value text-accent">{{ "{:,}".format(stats.two_week_cases) }}</div>
+        <div class="stat-desc">Recent trend</div>
+    </div>
+</div>

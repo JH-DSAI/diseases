@@ -15,6 +15,7 @@ class HealthResponse(BaseModel):
 class DiseaseListItem(BaseModel):
     """Disease list item model"""
     name: str = Field(..., description="Disease name")
+    slug: str = Field(..., description="URL-safe disease slug")
 
 
 class DiseaseListResponse(BaseModel):
@@ -56,6 +57,7 @@ class NationalDiseaseTimeSeriesDataPoint(BaseModel):
 class NationalDiseaseTimeSeriesResponse(BaseModel):
     """National disease time series response model"""
     disease_name: str = Field(..., description="Disease name")
+    disease_slug: str = Field(..., description="URL-safe disease slug")
     granularity: str = Field(..., description="Time granularity (month or week)")
     data: list[NationalDiseaseTimeSeriesDataPoint] = Field(..., description="Time series data points")
 
@@ -75,6 +77,7 @@ class StateTimeSeriesData(BaseModel):
 class DiseaseTimeSeriesByStateResponse(BaseModel):
     """Disease time series by state response model"""
     disease_name: str = Field(..., description="Disease name")
+    disease_slug: str = Field(..., description="URL-safe disease slug")
     granularity: str = Field(..., description="Time granularity (month or week)")
     available_states: list[str] = Field(..., description="List of states with data for this disease")
     states: dict[str, list[StateTimeSeriesDataPoint]] = Field(..., description="Time series data by state")
@@ -84,6 +87,7 @@ class DiseaseTimeSeriesByStateResponse(BaseModel):
 class DiseaseStatsResponse(BaseModel):
     """Disease-specific statistics response model"""
     disease_name: str = Field(..., description="Disease name")
+    disease_slug: str = Field(..., description="URL-safe disease slug")
     total_cases: int = Field(..., description="Total cases for this disease")
     affected_states: int = Field(..., description="Number of affected states/jurisdictions")
     affected_counties: int = Field(..., description="Number of affected counties/regions")
@@ -99,6 +103,7 @@ class AgeGroupData(BaseModel):
 class AgeGroupDistributionResponse(BaseModel):
     """Age group distribution by state response model"""
     disease_name: str = Field(..., description="Disease name")
+    disease_slug: str = Field(..., description="URL-safe disease slug")
     age_groups: list[str] = Field(..., description="List of age groups")
     available_states: list[str] = Field(..., description="List of states with age group data")
     states: dict[str, dict[str, AgeGroupData]] = Field(..., description="Age group distribution by state")
