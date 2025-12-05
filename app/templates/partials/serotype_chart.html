@@ -1,0 +1,60 @@
+{# Serotype distribution chart - data embedded in response #}
+
+<script type="application/json" id="serotype-data">{{ chart_data | tojson }}</script>
+
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h3 class="card-title mb-4">Serogroup Distribution by State</h3>
+
+        {% if chart_data.available_states %}
+        <div x-data="serotypeFilter('{{ disease_name }}')" x-init="init()" x-effect="renderChart()">
+            <h4 class="text-sm font-medium mb-3">Select states to display (only states with serogroup data shown)</h4>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <template x-for="state in availableStates" :key="state">
+                    <button
+                        :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
+                        @click="toggleState(state)"
+                        x-text="state">
+                    </button>
+                </template>
+            </div>
+            <div x-ref="chart" class="w-full" style="min-height: 450px;"></div>
+        </div>
+        {% else %}
+        <div class="h-64 flex items-center justify-center bg-base-200 rounded">
+            <p class="text-base-content/50">No serogroup data available for this disease</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function serotypeFilter(diseaseName) {
+    return {
+        availableStates: [],
+        selectedStates: [],
+        chartData: null,
+        init() {
+            const dataEl = document.getElementById('serotype-data');
+            if (dataEl) {
+                this.chartData = JSON.parse(dataEl.textContent);
+                this.availableStates = this.chartData.available_states || [];
+                this.selectedStates = [...this.availableStates];
+            }
+        },
+        toggleState(state) {
+            if (this.selectedStates.includes(state)) {
+                this.selectedStates = this.selectedStates.filter(s => s !== state);
+            } else {
+                this.selectedStates = [...this.selectedStates, state];
+            }
+        },
+        renderChart() {
+            if (this.chartData && this.$refs.chart) {
+                const svg = createSerotypeChart(this.chartData, diseaseName, this.selectedStates);
+                this.$refs.chart.replaceChildren(svg);
+            }
+        }
+    }
+}
+</script>
