@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Staging auth (HTTP Basic Auth for dev/staging environments)
+    staging_auth_enabled: bool = False
+    staging_auth_username: str = "admin"
+    staging_auth_password: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
