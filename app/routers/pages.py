@@ -17,18 +17,26 @@ router = APIRouter(
 
 
 @router.get("/", response_class=HTMLResponse)
-async def landing_page(request: Request):
+async def landing_page(request: Request, data_source: str | None = None):
     """
     Landing page with navigation.
     Disease cards are loaded via HTMX from /api/html/diseases.
 
     Args:
         request: FastAPI request object
+        data_source: Optional filter for data source (e.g., 'nndss', 'tracker')
 
     Returns:
         Rendered HTML template
     """
-    return templates.TemplateResponse(request, "index.html", {"page_title": "Disease Dashboard"})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "page_title": "Disease Dashboard",
+            "data_source_filter": data_source,
+        },
+    )
 
 
 @router.get("/disease/{disease_slug}", response_class=HTMLResponse)
@@ -62,12 +70,20 @@ async def disease_detail_page(request: Request, disease_slug: str):
             status_code=404,
         )
 
+    # Get data source for this disease
+    data_source = (
+        await run_db_query(db.get_disease_data_source_by_slug, disease_slug)
+        if db.is_initialized()
+        else None
+    )
+
     return templates.TemplateResponse(
         request,
         "disease.html",
         {
             "disease_name": disease_name,
             "disease_slug": disease_slug,
+            "data_source": data_source,
             "page_title": f"{disease_name.title()} Dashboard"
             if disease_name
             else "Disease Dashboard",
