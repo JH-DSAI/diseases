@@ -63,6 +63,12 @@ class TestUninitializedDatabase:
         result = db.get_disease_timeseries_by_state("Measles")
         assert result == {"states": {}, "national": [], "available_states": []}
 
+    def test_get_serotype_distribution_returns_empty(self):
+        """Test get_serotype_distribution_by_state returns empty when not initialized."""
+        db = DiseaseDatabase()
+        result = db.get_serotype_distribution_by_state("Meningococcal disease")
+        assert result == {"states": {}, "serotypes": [], "available_states": []}
+
     def test_is_initialized_false(self):
         """Test is_initialized returns False for new database."""
         db = DiseaseDatabase()
@@ -121,3 +127,13 @@ class TestDataSourceFilters:
         """Test get_disease_timeseries_by_state filters by data source."""
         data = etl_test_db.get_disease_timeseries_by_state("Measles", data_source="tracker")
         assert isinstance(data, dict)
+
+    def test_get_serotype_distribution_with_source(self, etl_test_db):
+        """Test get_serotype_distribution_by_state filters by data source."""
+        data = etl_test_db.get_serotype_distribution_by_state(
+            "Meningococcal disease", data_source="tracker"
+        )
+        assert isinstance(data, dict)
+        assert "states" in data
+        assert "serotypes" in data
+        assert "available_states" in data
