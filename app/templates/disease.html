@@ -9,7 +9,18 @@
             <li class="capitalize">{{ disease_name }}</li>
         </ul>
     </div>
-    <h1 class="text-4xl font-bold capitalize mt-4">{{ disease_name }}</h1>
+    <div class="flex items-center justify-between mt-4">
+        <h1 class="text-4xl font-bold capitalize">{{ disease_name }}</h1>
+        {% if data_source %}
+        <div class="flex gap-1">
+            {% for source in data_source.split(',') %}
+            <span class="badge {% if source == 'nndss' %}badge-primary{% else %}badge-secondary{% endif %}">
+                {{ source.upper() }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
     <p class="text-lg text-base-content/70 mt-2">Detailed statistics and visualizations</p>
 </div>
 
@@ -75,7 +86,7 @@
 
 <!-- Back to Home -->
 <div class="mt-8">
-    <a href="/" class="btn btn-outline">
+    <a href="/" class="btn btn-outline" data-home-link>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
@@ -85,6 +96,4 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/disease-state-trend-chart.js"></script>
-<script src="/static/js/age-group-chart.js"></script>
 {% endblock %}

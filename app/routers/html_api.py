@@ -18,23 +18,31 @@ router = APIRouter(
 
 
 @router.get("/diseases", response_class=HTMLResponse)
-async def get_disease_cards(request: Request, _db=Depends(get_db)):
+async def get_disease_cards(
+    request: Request, data_source: str | None = None, _db=Depends(get_db)
+):
     """
     Returns HTML fragment containing all disease cards.
     Used by HTMX to populate the landing page grid.
-    """
-    diseases_raw = await run_db_query(db.get_diseases_with_slugs)
 
-    # Get summary stats for cumulative totals
-    stats = await run_db_query(db.get_summary_stats)
+    Args:
+        data_source: Optional filter for data source (e.g., 'nndss', 'tracker')
+    """
+    diseases_raw = await run_db_query(db.get_diseases_with_slugs, data_source)
+
+    # Get summary stats for cumulative totals (filtered by source if specified)
+    stats = await run_db_query(db.get_summary_stats, data_source)
     disease_totals = {d["disease_name"]: d["total_cases"] for d in stats.get("disease_totals", [])}
 
-    # Enrich diseases with total cases
+    # Enrich diseases with total cases and data source
     diseases = []
     for d in diseases_raw:
-        diseases.append(
-            {"name": d["name"], "slug": d["slug"], "total_cases": disease_totals.get(d["name"])}
-        )
+        diseases.append({
+            "name": d["name"],
+            "slug": d["slug"],
+            "total_cases": disease_totals.get(d["name"]),
+            "data_source": d.get("data_source", ""),
+        })
 
     return templates.TemplateResponse(
         request, "partials/disease_cards.html", {"diseases": diseases}

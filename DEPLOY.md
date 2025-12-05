@@ -1,6 +1,6 @@
 # Deploying Disease Dashboard to Azure Container Apps
 
-This guide covers deploying the Disease Dashboard to Azure Container Apps with GitHub Actions CI/CD.
+This guide covers deploying the Disease Dashboard to Azure Container Apps.
 
 ## Prerequisites
 
@@ -8,7 +8,32 @@ This guide covers deploying the Disease Dashboard to Azure Container Apps with G
 - An Azure subscription
 - GitHub repository with this code
 
-## 1. Azure Resource Setup
+## Deployment Options
+
+There are two ways to deploy:
+
+1. **Azure Portal UI** (Quick start) - Use "Source code or artifact" to deploy directly from GitHub
+2. **CLI + GitHub Actions** (Automated CI/CD) - Set up ACR and automated deployments
+
+---
+
+## Option A: Deploy via Azure Portal (Quickest)
+
+1. Go to [Azure Portal](https://portal.azure.com) > Create a resource > Container App
+2. Configure basics:
+   - **Resource group**: Create new or use existing
+   - **Container app name**: `disease-dashboard` (lowercase, hyphens allowed)
+   - **Region**: Choose your preferred region
+3. On deployment source, select **"Source code or artifact"**
+4. Connect to your GitHub repository
+5. Azure will auto-detect the Dockerfile and build/deploy for you
+6. Configure ingress to allow external traffic on port 8000
+
+This approach is simpler but doesn't include automated CI/CD on push.
+
+---
+
+## Option B: CLI Setup with GitHub Actions (Recommended for CI/CD)
 
 ### Login to Azure
 
@@ -20,14 +45,14 @@ az login
 
 ```bash
 # Customize these values
-RESOURCE_GROUP="disease-dashboard-rg"
-LOCATION="eastus"
+RESOURCE_GROUP="USDT_web_app"
+LOCATION="westus2"
 ACR_NAME="diseasedashboardacr"  # Must be globally unique, lowercase, no hyphens
 CONTAINER_APP_NAME="disease-dashboard"
 ENVIRONMENT_NAME="disease-dashboard-env"
 ```
 
-### Create Resource Group
+### Create Resource Group (skip if using existing)
 
 ```bash
 az group create --name $RESOURCE_GROUP --location $LOCATION
@@ -52,7 +77,7 @@ az containerapp env create \
   --location $LOCATION
 ```
 
-## 2. Create Service Principal for GitHub Actions
+### Create Service Principal for GitHub Actions
 
 ```bash
 # Create service principal with Contributor role
@@ -78,23 +103,17 @@ az role assignment create \
   --scope $(az acr show --name $ACR_NAME --query id -o tsv)
 ```
 
-## 3. Configure GitHub Repository
-
-### Add Secrets
+### Configure GitHub Repository
 
 Go to your GitHub repository > Settings > Secrets and variables > Actions
 
-Add this **secret**:
+**Add this secret:**
 
 | Name | Value |
 |------|-------|
 | `AZURE_CREDENTIALS` | The entire JSON output from the service principal creation |
 
-### Add Variables
-
-Go to Settings > Secrets and variables > Actions > Variables tab
-
-Add these **variables**:
+**Add these variables** (Settings > Variables tab):
 
 | Name | Value |
 |------|-------|
@@ -102,7 +121,7 @@ Add these **variables**:
 | `CONTAINER_APP_NAME` | `disease-dashboard` |
 | `RESOURCE_GROUP` | Your resource group name |
 
-## 4. First-Time Deployment (Manual)
+### First-Time Deployment (Manual)
 
 For the initial deployment, create the Container App manually:
 
@@ -128,7 +147,9 @@ az containerapp create \
   --max-replicas 3
 ```
 
-## 5. Configure Staging Authentication
+---
+
+## Configure Staging Authentication
 
 To protect your staging environment with HTTP Basic Auth:
 
@@ -159,7 +180,7 @@ az containerapp update \
 
 Visit your Container App URL. You should see a browser login dialog.
 
-## 6. Automated Deployments
+## Automated Deployments (GitHub Actions)
 
 After initial setup, pushing to `main` triggers automatic deployment via GitHub Actions.
 

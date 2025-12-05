@@ -191,29 +191,41 @@ class DiseaseDatabase:
             return [row[0] for row in result]
 
     def get_diseases_with_slugs(self, data_source: str | None = None) -> list[dict]:
-        """Get list of unique diseases with their slugs."""
+        """Get list of unique diseases with their slugs and data sources.
+
+        When data_source is specified, returns diseases that have data from that source,
+        but includes ALL sources for each disease (not just the filtered source).
+        """
         if not self._initialized:
             return []
 
         with self._lock:
             if data_source:
+                # Find diseases that have data from the specified source,
+                # but return all sources for those diseases
                 result = self.conn.execute(
                     """
-                    SELECT DISTINCT disease_name, disease_slug
+                    SELECT disease_name, disease_slug, STRING_AGG(DISTINCT data_source, ',') as sources
                     FROM disease_data
-                    WHERE data_source = ?
+                    WHERE disease_slug IN (
+                        SELECT DISTINCT disease_slug
+                        FROM disease_data
+                        WHERE data_source = ?
+                    )
+                    GROUP BY disease_name, disease_slug
                     ORDER BY disease_name
                 """,
                     [data_source],
                 ).fetchall()
             else:
                 result = self.conn.execute("""
-                    SELECT DISTINCT disease_name, disease_slug
+                    SELECT disease_name, disease_slug, STRING_AGG(DISTINCT data_source, ',') as sources
                     FROM disease_data
+                    GROUP BY disease_name, disease_slug
                     ORDER BY disease_name
                 """).fetchall()
 
-            return [{"name": row[0], "slug": row[1]} for row in result]
+            return [{"name": row[0], "slug": row[1], "data_source": row[2]} for row in result]
 
     def get_disease_name_by_slug(self, slug: str) -> str | None:
         """Look up disease name by its slug."""
@@ -227,6 +239,23 @@ class DiseaseDatabase:
                 FROM disease_data
                 WHERE disease_slug = ?
                 LIMIT 1
+            """,
+                [slug],
+            ).fetchone()
+
+            return result[0] if result else None
+
+    def get_disease_data_source_by_slug(self, slug: str) -> str | None:
+        """Look up data source(s) for a disease by its slug."""
+        if not self._initialized:
+            return None
+
+        with self._lock:
+            result = self.conn.execute(
+                """
+                SELECT STRING_AGG(DISTINCT data_source, ',') as sources
+                FROM disease_data
+                WHERE disease_slug = ?
             """,
                 [slug],
             ).fetchone()

@@ -2,7 +2,18 @@
 <a href="/disease/{{ disease.slug }}"
    class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer">
     <div class="card-body">
-        <h3 class="card-title capitalize">{{ disease.name }}</h3>
+        <div class="flex items-center justify-between">
+            <h3 class="card-title capitalize">{{ disease.name }}</h3>
+            {% if disease.data_source %}
+            <div class="flex gap-1">
+                {% for source in disease.data_source.split(',') %}
+                <span class="badge badge-sm {% if source == 'nndss' %}badge-primary{% else %}badge-secondary{% endif %}">
+                    {{ source.upper() }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
         <div x-data="diseaseCard('{{ disease.slug }}', '{{ disease.name }}')" x-init="load()">
             <div x-ref="chart" class="w-full" style="min-height: 205px;">
                 <div class="flex items-center justify-center h-48">
