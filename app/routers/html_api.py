@@ -18,9 +18,7 @@ router = APIRouter(
 
 
 @router.get("/diseases", response_class=HTMLResponse)
-async def get_disease_cards(
-    request: Request, data_source: str | None = None, _db=Depends(get_db)
-):
+async def get_disease_cards(request: Request, data_source: str | None = None, _db=Depends(get_db)):
     """
     Returns HTML fragment containing all disease cards.
     Used by HTMX to populate the landing page grid.
@@ -37,12 +35,14 @@ async def get_disease_cards(
     # Enrich diseases with total cases and data source
     diseases = []
     for d in diseases_raw:
-        diseases.append({
-            "name": d["name"],
-            "slug": d["slug"],
-            "total_cases": disease_totals.get(d["name"]),
-            "data_source": d.get("data_source", ""),
-        })
+        diseases.append(
+            {
+                "name": d["name"],
+                "slug": d["slug"],
+                "total_cases": disease_totals.get(d["name"]),
+                "data_source": d.get("data_source", ""),
+            }
+        )
 
     return templates.TemplateResponse(
         request, "partials/disease_cards.html", {"diseases": diseases}
