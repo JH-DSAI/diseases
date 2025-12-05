@@ -5,9 +5,9 @@ configfile: pyproject.toml
 testpaths: tests
 plugins: asyncio-0.24.0, anyio-4.11.0, cov-7.0.0
 asyncio: mode=Mode.AUTO, default_loop_scope=function
-collected 206 items
+collected 208 items
 
-tests/api/test_auth_middleware.py .................................      [ 16%]
+tests/api/test_auth_middleware.py .................................      [ 15%]
 tests/api/test_disease_endpoints.py ...............                      [ 23%]
 tests/api/test_error_handling.py .......                                 [ 26%]
 tests/api/test_health_endpoints.py ........                              [ 30%]
@@ -16,11 +16,11 @@ tests/etl/test_config.py .....                                           [ 39%]
 tests/etl/test_etl_integration.py ....................                   [ 49%]
 tests/etl/test_nndss_transformer.py ...............                      [ 56%]
 tests/etl/test_normalizers.py ...........................                [ 69%]
-tests/etl/test_schema.py .......                                         [ 73%]
-tests/etl/test_tracker_transformer.py ..........                         [ 78%]
-tests/html/test_html_fragments.py ..........                             [ 83%]
-tests/html/test_page_rendering.py .............                          [ 89%]
-tests/test_database.py ......................                            [100%]
+tests/etl/test_schema.py .......                                         [ 72%]
+tests/etl/test_tracker_transformer.py ..........                         [ 77%]
+tests/html/test_html_fragments.py ..........                             [ 82%]
+tests/html/test_page_rendering.py .............                          [ 88%]
+tests/test_database.py ........................                          [100%]
 
 ------ generated xml file: /home/runner/work/diseases/diseases/pytest.xml ------
 ================================ tests coverage ================================
@@ -28,20 +28,21 @@ _______________ coverage: platform linux, python 3.11.14-final-0 _______________
 
 Name                              Stmts   Miss  Cover   Missing
 ---------------------------------------------------------------
-app/database.py                     201     13    94%   38-39, 98-99, 102-103, 112-113, 125-126, 295, 354, 531
+app/database.py                     237     34    86%   38-39, 98-99, 102-103, 112-113, 125-126, 251, 324, 383, 560, 655-705
 app/dependencies.py                  16      1    94%   23
 app/etl/base.py                      51      6    88%   117, 130, 170-173
 app/etl/config.py                    13      1    92%   14
 app/etl/schema.py                    20      1    95%   12
 app/etl/transformers/nndss.py       119      8    93%   55, 106-107, 147, 151, 179-181
-app/etl/transformers/tracker.py      85      9    89%   55-56, 69-70, 73-74, 115, 117, 161
+app/etl/transformers/tracker.py      90     10    89%   55-56, 69-70, 73-74, 115, 117, 161, 172
 app/main.py                          40     17    58%   32-58, 71-72
 app/middleware/auth.py               53      1    98%   105
 app/routers/api.py                   78     18    77%   62-64, 81-83, 115-117, 159-161, 190-192, 230-232
+app/routers/html_api.py              38      3    92%   123-126
 ---------------------------------------------------------------
-TOTAL                               888     75    92%
+TOTAL                               935    100    89%
 
-14 files skipped due to complete coverage.
+13 files skipped due to complete coverage.
 Coverage HTML written to dir htmlcov
-Required test coverage of 70% reached. Total coverage: 91.55%
-============================= 206 passed in 2.59s ==============================
+Required test coverage of 70% reached. Total coverage: 89.30%
+============================= 208 passed in 2.75s ==============================
