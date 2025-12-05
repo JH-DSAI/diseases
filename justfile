@@ -1,7 +1,10 @@
 # Disease Dashboard - Just Commands
 
 # Run development server (builds assets first)
-dev: build
+dev:
+    uv sync --extra dev
+    just js-install
+    just js-build
     uv run uvicorn app.main:app --reload --reload-exclude '*.duckdb' --host 0.0.0.0 --port 8000
 
 # Run all tests
@@ -34,8 +37,11 @@ test-cov:
     @echo "Coverage report generated in htmlcov/"
 
 # Build frontend assets
-build:
+js-build:
     npm run build
+
+js-install:
+    npm install
 
 # Run linter
 lint:
