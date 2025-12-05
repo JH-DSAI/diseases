@@ -26,7 +26,7 @@ function createAgeGroupChart(data, diseaseName, selectedStates = [], options = {
         .style("height", "auto");
 
     // Validate data
-    if (!data || !data.states || !data.age_groups || !data.available_states) {
+    if (!data || !data.states || !data.age_groups || !data.available_states || data.age_groups.length === 0) {
         svg.append("text")
             .attr("x", width / 2)
             .attr("y", height / 2)
@@ -135,7 +135,7 @@ function createAgeGroupChart(data, diseaseName, selectedStates = [], options = {
         .attr("width", x.bandwidth())
         .style("opacity", 0.9)
         .append("title")
-        .text(d => {
+        .text(function(d) {
             const ageGroup = d3.select(this.parentNode.parentNode).datum().key;
             return `${d.data.state} - ${ageGroup}: ${(d[1] - d[0]).toFixed(1)}%`;
         });
