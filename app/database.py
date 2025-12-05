@@ -616,6 +616,98 @@ class DiseaseDatabase:
                 "available_states": available_states,
             }
 
+    def get_serotype_distribution_by_state(
+        self, disease_name: str, data_source: str | None = None
+    ) -> dict:
+        """Get serotype/subtype distribution by state for a disease.
+
+        Only returns data for states that have serotype information
+        (disease_subtype not null and not 'na').
+        """
+        if not self._initialized:
+            return {"states": {}, "serotypes": [], "available_states": []}
+
+        with self._lock:
+            where_clause = (
+                "WHERE disease_name = ?"
+                if not data_source
+                else "WHERE disease_name = ? AND data_source = ?"
+            )
+            params = [disease_name] if not data_source else [disease_name, data_source]
+
+            # Get states that have serotype data (non-null and non-'na' subtypes)
+            states_result = self.conn.execute(
+                f"""
+                SELECT DISTINCT state FROM disease_data
+                {where_clause}
+                  AND disease_subtype IS NOT NULL
+                  AND LOWER(disease_subtype) != 'na'
+                ORDER BY state
+            """,
+                params,
+            ).fetchall()
+            available_states = [row[0] for row in states_result]
+
+            if not available_states:
+                return {"states": {}, "serotypes": [], "available_states": []}
+
+            # Get all serotypes present in the data
+            serotype_result = self.conn.execute(
+                f"""
+                SELECT DISTINCT disease_subtype FROM disease_data
+                {where_clause}
+                  AND disease_subtype IS NOT NULL
+                  AND LOWER(disease_subtype) != 'na'
+                ORDER BY disease_subtype
+            """,
+                params,
+            ).fetchall()
+            serotypes = [row[0].upper() for row in serotype_result]
+
+            # Get serotype counts by state
+            distribution_result = self.conn.execute(
+                f"""
+                SELECT state, disease_subtype, SUM(count) as total_cases
+                FROM disease_data
+                {where_clause}
+                  AND disease_subtype IS NOT NULL
+                  AND LOWER(disease_subtype) != 'na'
+                GROUP BY state, disease_subtype
+                ORDER BY state, disease_subtype
+            """,
+                params,
+            ).fetchall()
+
+            # Build state data with counts and percentages
+            states_data = {}
+            for state in available_states:
+                state_total = 0
+                state_serotype_counts = {}
+
+                for row in distribution_result:
+                    if row[0] == state:
+                        serotype_key = row[1].upper()
+                        count = int(row[2]) if row[2] else 0
+                        state_serotype_counts[serotype_key] = count
+                        state_total += count
+
+                state_serotype_data = {}
+                for serotype in serotypes:
+                    count = state_serotype_counts.get(serotype, 0)
+                    percentage = (count / state_total * 100) if state_total > 0 else 0
+                    state_serotype_data[serotype] = {
+                        "count": count,
+                        "percentage": round(percentage, 2),
+                    }
+
+                states_data[state] = state_serotype_data
+
+            return {
+                "states": states_data,
+                "serotypes": serotypes,
+                "available_states": available_states,
+            }
+
     def close(self):
         """Close database connection."""
         if self.conn:

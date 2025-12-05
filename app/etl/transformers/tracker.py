@@ -145,7 +145,7 @@ class TrackerTransformer(DataSourceTransformer):
         # Fields with defaults or from CSV if present
         unified["date_type"] = df.get("date_type", "cccd")
         unified["time_unit"] = df.get("time_unit", "month")
-        unified["disease_subtype"] = self._clean_nullable_column(df.get("disease_subtype"))
+        unified["disease_subtype"] = self._normalize_subtype(df.get("disease_subtype"))
         unified["reporting_jurisdiction"] = df.get("reporting_jurisdiction", df["state"])
         unified["geo_name"] = df.get("geo_name", df["state"])
         unified["geo_unit"] = df.get("geo_unit", "state")
@@ -164,4 +164,17 @@ class TrackerTransformer(DataSourceTransformer):
         placeholders = {"not specified", "unknown", "n/a", "na", ""}
         return series.apply(
             lambda x: None if pd.isna(x) or str(x).lower().strip() in placeholders else x
+        )
+
+    def _normalize_subtype(self, series: pd.Series | None) -> pd.Series | None:
+        """Clean and normalize disease subtype to uppercase."""
+        if series is None:
+            return None
+
+        # Convert common placeholder strings to None, uppercase valid values
+        placeholders = {"not specified", "unknown", "n/a", "na", ""}
+        return series.apply(
+            lambda x: None
+            if pd.isna(x) or str(x).lower().strip() in placeholders
+            else str(x).upper().strip()
         )
