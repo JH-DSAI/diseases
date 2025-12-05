@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import db
+from app.middleware import BasicAuthMiddleware
 from app.routers import api, html_api, pages
 
 # Configure logging
@@ -64,6 +65,11 @@ app = FastAPI(
     description="US Disease Tracker Dashboard - Data visualizations for disease surveillance",
     lifespan=lifespan,
 )
+
+# Add staging authentication middleware (if enabled)
+if settings.staging_auth_enabled:
+    app.add_middleware(BasicAuthMiddleware)
+    logger.info("Staging authentication enabled")
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"
