@@ -41,6 +41,21 @@
 
 <!-- Visualization Section -->
 <div class="space-y-8">
+    <!-- State Selector - loaded via HTMX -->
+    <div hx-get="/api/html/disease/{{ disease_slug }}/state-selector"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <!-- Loading skeleton -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h3 class="card-title text-base">Filter by State</h3>
+                <div class="flex items-center justify-center h-24">
+                    <span class="loading loading-spinner loading-md"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Time Series Chart - loaded via HTMX -->
     <div hx-get="/api/html/disease/{{ disease_slug }}/timeseries?granularity=month"
          hx-trigger="load"

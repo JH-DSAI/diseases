@@ -134,6 +134,34 @@ async def get_serotype_chart(request: Request, disease_slug: str, _db=Depends(ge
     )
 
 
+@router.get("/disease/{disease_slug}/state-selector", response_class=HTMLResponse)
+async def get_state_selector(request: Request, disease_slug: str, _db=Depends(get_db)):
+    """
+    Returns HTML fragment containing state selector grid with embedded data.
+    Used by HTMX to populate the state filter card on disease detail page.
+    Publishes selection to MosaicState for cross-chart filtering.
+    """
+    disease_name = await get_disease_name_or_404(disease_slug)
+    state_data = await run_db_query(db.get_state_case_totals, disease_name)
+
+    # Transform to list of {state, total} for the selector component
+    states = [{"state": "National", "total": sum(s["cases"] for s in state_data["states"].values())}]
+    states.extend(
+        {"state": state, "total": data["cases"]}
+        for state, data in state_data["states"].items()
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "partials/state_selector.html",
+        {
+            "disease_slug": disease_slug,
+            "disease_name": disease_name,
+            "states": states,
+        },
+    )
+
+
 @router.get("/disease/{disease_slug}/state-map", response_class=HTMLResponse)
 async def get_state_map_chart(
     request: Request,
