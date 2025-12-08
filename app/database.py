@@ -809,6 +809,47 @@ class DiseaseDatabase:
                 "available_states": available_states,
             }
 
+    def execute_sql(self, sql: str) -> dict:
+        """Execute a raw SQL query and return results.
+
+        This method is used by the SQL API endpoint for Mosaic coordinator
+        queries. The SQL should be validated before calling this method.
+
+        Args:
+            sql: The SQL query to execute (should be SELECT only)
+
+        Returns:
+            Dictionary with:
+            - data: List of row dictionaries
+            - columns: List of column names
+            - row_count: Number of rows returned
+        """
+        if not self._initialized:
+            return {"data": [], "columns": [], "row_count": 0}
+
+        with self._lock:
+            result = self.conn.execute(sql)
+            columns = [desc[0] for desc in result.description]
+            rows = result.fetchall()
+
+            # Convert rows to list of dictionaries
+            data = []
+            for row in rows:
+                row_dict = {}
+                for i, col in enumerate(columns):
+                    value = row[i]
+                    # Handle datetime serialization
+                    if hasattr(value, 'strftime'):
+                        value = value.strftime("%Y-%m-%d")
+                    row_dict[col] = value
+                data.append(row_dict)
+
+            return {
+                "data": data,
+                "columns": columns,
+                "row_count": len(data)
+            }
+
     def close(self):
         """Close database connection."""
         if self.conn:

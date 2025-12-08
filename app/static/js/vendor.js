@@ -1,6 +1,6 @@
 /**
  * Vendor Bundle - Third-party dependencies
- * This file bundles HTMX, Alpine.js, and D3.js for the application
+ * This file bundles HTMX, Alpine.js, D3.js, and Mosaic for the application
  */
 
 // HTMX - Dynamic HTML updates
@@ -15,13 +15,9 @@ import * as d3 from 'd3';
 // TopoJSON - For map rendering
 import * as topojson from 'topojson-client';
 
-// Crossfilter - Multi-dimensional filtering
-import crossfilter from 'crossfilter2';
-
-// DC.js - Dimensional charting with crossfilter
-import * as dc from 'dc';
-import 'dc/src/compat/d3v6';  // D3 v6+ compatibility layer
-import 'dc/dist/style/dc.css';
+// Mosaic - Cross-filtering coordinator
+import { Coordinator, Selection, MosaicClient } from '@uwdata/mosaic-core';
+import { Query, count, sum, avg, min, max } from '@uwdata/mosaic-sql';
 
 // Expose Alpine globally
 window.Alpine = Alpine;
@@ -40,10 +36,17 @@ window.d3 = d3;
 // Expose TopoJSON globally for map rendering
 window.topojson = topojson;
 
-// Expose Crossfilter globally for DC.js
-window.crossfilter = crossfilter;
+// Expose Mosaic globally for cross-filtering
+window.Mosaic = {
+    Coordinator,
+    Selection,
+    MosaicClient,
+    Query,
+    count,
+    sum,
+    avg,
+    min,
+    max
+};
 
-// Expose DC.js globally for dimensional charting
-window.dc = dc;
-
-console.log('Vendor bundle loaded: HTMX, Alpine.js, D3.js, TopoJSON, Crossfilter, DC.js');
+console.log('Vendor bundle loaded: HTMX, Alpine.js, D3.js, TopoJSON, Mosaic');
