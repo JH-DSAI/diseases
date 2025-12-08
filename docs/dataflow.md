@@ -37,10 +37,16 @@ This document describes the data flow architecture for the disease dashboard, in
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Data API: /api/diseases, /api/timeseries/..., etc.                  │   │
+│  │  - RESTful JSON endpoints for programmatic access                   │   │
+│  │  - Typed responses with Pydantic models                             │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │ SQL API: /api/query                                                 │   │
 │  │  - Accepts SQL queries from Mosaic coordinator                      │   │
 │  │  - Returns JSON data for cross-filter interactions                  │   │
-│  └──────────────────────────────┬──────────────────────────────────────┘   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
 │                                 │                                           │
 │  ┌──────────────────────────────▼──────────────────────────────────────┐   │
 │  │ DuckDB (database.py)                                                │   │
@@ -48,7 +54,7 @@ This document describes the data flow architecture for the disease dashboard, in
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Two API Patterns
+## Three API Patterns
 
 ### HTML API (Initial Load)
 
@@ -60,6 +66,24 @@ The HTML API returns complete HTML partials with embedded JSON data:
   - `<script type="application/json">` with embedded data
 - **Loaded by**: HTMX on page load
 - **Purpose**: Fast initial render without additional network requests
+
+### Data API (Programmatic Access)
+
+The Data API provides structured JSON endpoints for external consumers:
+
+- **Base path**: `/api/`
+- **Endpoints**:
+  - `GET /api/health` - Health check
+  - `GET /api/diseases` - List all diseases with metadata
+  - `GET /api/stats` - Summary statistics across all diseases
+  - `GET /api/timeseries/national/{disease_slug}` - National time series
+  - `GET /api/timeseries/states/{disease_slug}` - State-level time series
+  - `GET /api/disease/{disease_slug}/stats` - Disease-specific statistics
+  - `GET /api/disease/{disease_slug}/age-groups` - Age group distribution
+  - `GET /api/disease/{disease_slug}/state-totals` - Case totals by state
+- **Returns**: Typed JSON responses with Pydantic models
+- **Purpose**: External integrations, data exports, programmatic access
+- **Docs**: Available at `/docs` (Swagger UI) and `/redoc`
 
 ### SQL API (Interactions)
 
@@ -205,27 +229,87 @@ window.ChartComponent = { loader, action, render };
 
 ## Cross-Filtering with Mosaic
 
-For interactive cross-filtering, components use the Mosaic coordinator:
+For interactive cross-filtering, components use the Mosaic coordinator and shared selections.
 
-1. **Mosaic Selection**: Manages filter state across multiple charts
-2. **Mosaic Coordinator**: Routes SQL queries to the server
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Shared State (mosaic-state.js)                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ stateSelection = Mosaic.Selection()                      │   │
+│  │ coordinator = Mosaic.Coordinator()                       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+         │                              │
+         ▼                              ▼
+┌─────────────────────┐       ┌─────────────────────┐
+│ State Trend Chart   │       │ USA Map             │
+│ - Publishes to      │       │ - Subscribes to     │
+│   stateSelection    │       │   stateSelection    │
+└─────────────────────┘       └─────────────────────┘
+```
+
+### Key Concepts
+
+1. **Mosaic Selection**: Shared filter state that multiple charts can subscribe to
+2. **Mosaic Coordinator**: Routes SQL queries to the REST connector
 3. **REST Connector**: Sends queries to `/api/query` endpoint
+4. **Lazy Initialization**: Coordinator/Selection created on first use, not at page load
+
+### Shared State Module
+
+The `mosaic-state.js` module provides lazy-initialized shared state:
 
 ```javascript
-// Lazy coordinator initialization
+// app/static/js/lib/mosaic-state.js
 let coordinator = null;
+let stateSelection = null;
+
 function getCoordinator() {
     if (!coordinator) {
-        coordinator = new Mosaic.Coordinator();
-        coordinator.databaseConnector(createRestConnector());
+        coordinator = new window.Mosaic.Coordinator();
+        coordinator.databaseConnector(window.createRestConnector());
     }
     return coordinator;
 }
 
+function getStateSelection() {
+    if (!stateSelection) {
+        stateSelection = new window.Mosaic.Selection();
+    }
+    return stateSelection;
+}
+
+// Exposed globally as window.MosaicState
+```
+
+### Local vs Shared State
+
+| State Type | Scope | Example | Storage |
+|------------|-------|---------|---------|
+| **Shared** | Cross-chart | State selection, date range | Mosaic Selection |
+| **Local** | Single component | Search filter, hover state | Component context |
+
+- **Shared state** (via Mosaic Selection): When one chart's selection should update other charts
+- **Local state** (in component context): UI-only state like search filters that don't affect other charts
+
+### Usage in Components
+
+```javascript
 // In action()
 case 'SELECT_STATE':
-    selection.update({ predicate: `state = '${payload.state}'` });
-    return await getCoordinator().query(filteredQuery);
+    // Update shared Mosaic selection (triggers other chart updates)
+    const selection = window.MosaicState.getStateSelection();
+    selection.update({ clauses: [{ state: payload.state }] });
+    // Also update local state
+    selectedStates.add(payload.state);
+    return filterData(originalData, selectedStates);
+
+case 'SEARCH_STATES':
+    // Local UI state only - doesn't affect other charts
+    setSearchFilter(payload.filter);
+    return filterData(originalData, selectedStates);
 ```
 
 ## Security Considerations

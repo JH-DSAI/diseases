@@ -1,36 +1,22 @@
 {# Time series chart by state - Loader/Action/Render pattern #}
+{# Subscribes to MosaicState for cross-chart state filtering #}
 
 {# Embedded JSON from server - used by loader() #}
 <script type="application/json" id="timeseries-data">{{ chart_data | tojson }}</script>
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="card-title">Cases Over Time by State</h3>
-        </div>
+        <h3 class="card-title">Cases Over Time by State</h3>
 
-        <p class="text-sm text-base-content/70 mb-4">
-            Click states on the left to filter. Shift+click for multi-select.
-        </p>
-
-        <div class="flex gap-4 overflow-hidden">
-            {# State filter (row chart) #}
-            <div class="shrink-0" style="width: 180px;">
-                <button id="reset-state-filter" class="btn btn-xs btn-ghost mb-2">Reset Filters</button>
-                <div id="state-filter" class="overflow-y-auto" style="max-height: 350px;"></div>
-            </div>
-
-            {# Main line chart #}
-            <div id="state-trend-chart" class="flex-1 overflow-hidden"></div>
-        </div>
+        <div id="state-trend-chart"></div>
     </div>
 </div>
 
 <script>
 (function() {
-    const { loader, action, render } = window.StateTrendChart;
+    const { loader, render } = window.StateTrendChart;
 
-    // Parse embedded JSON (already loaded with HTMX partial!)
+    // Parse embedded JSON
     const dataEl = document.getElementById('timeseries-data');
     if (!dataEl) return;
 
@@ -40,33 +26,16 @@
         return;
     }
 
-    // Loader uses embedded data - no fetch!
+    // Initialize context
     const context = loader(embeddedData, '{{ disease_slug }}');
-    let data = { rowData: context.rowData, lineData: context.lineData };
 
-    // Dispatch actions -> update UI
-    const dispatch = async (type, payload) => {
-        data = await action(type, payload, context);
-        updateUI();
-    };
-
-    function updateUI() {
-        const { rowSvg, lineSvg } = render(data, dispatch, {
-            selectedStates: context.selectedStates
-        });
-        document.getElementById('state-filter').replaceChildren(rowSvg);
-        document.getElementById('state-trend-chart').replaceChildren(lineSvg);
+    // Render function
+    function updateUI(selectedStates) {
+        const svg = render(context, selectedStates);
+        document.getElementById('state-trend-chart').replaceChildren(svg);
     }
 
-    // Initial render - synchronous, from embedded data!
-    updateUI();
-
-    // Reset button
-    const resetBtn = document.getElementById('reset-state-filter');
-    if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-            dispatch('CLEAR_FILTER', {});
-        });
-    }
+    // Subscribe to MosaicState for selection changes
+    window.MosaicState.subscribeToStateSelection(updateUI);
 })();
 </script>
