@@ -1,54 +1,65 @@
-{# Time series chart by state - data embedded in response #}
+{# Time series chart by state - DC.js with crossfilter #}
+
+<style>
+/* Fix DC.js series chart to render as lines, not filled areas */
+#state-trend-chart .chart-body path.line {
+    fill: none !important;
+    stroke-width: 2px;
+}
+#state-trend-chart .chart-body path.area {
+    display: none !important;
+}
+</style>
 
 <script type="application/json" id="timeseries-data">{{ chart_data | tojson }}</script>
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-        <h3 class="card-title mb-4">Cases Over Time by State</h3>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title">Cases Over Time by State</h3>
+        </div>
 
-        <div x-data="timeseriesFilter('{{ disease_name }}')" x-init="init()" x-effect="renderChart()">
-            <h4 class="text-sm font-medium mb-3">Select states to display (national total shown by default)</h4>
-            <div class="flex flex-wrap gap-2 mb-4">
-                <template x-for="state in availableStates" :key="state">
-                    <button
-                        :class="selectedStates.includes(state) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost opacity-50'"
-                        @click="toggleState(state)"
-                        x-text="state">
-                    </button>
-                </template>
+        <p class="text-sm text-base-content/70 mb-4">
+            Click states on the left to filter. Shift+click for multi-select.
+        </p>
+
+        <div class="flex gap-4 overflow-hidden">
+            <!-- State filter (DC row chart) -->
+            <div class="shrink-0" style="width: 180px;">
+                <button id="reset-state-filter" class="btn btn-xs btn-ghost mb-2">Reset Filters</button>
+                <div id="state-filter" class="overflow-y-auto" style="max-height: 350px;"></div>
             </div>
-            <div x-ref="chart" class="w-full" style="min-height: 450px;"></div>
+
+            <!-- Main series chart -->
+            <div id="state-trend-chart" class="flex-1 overflow-hidden"></div>
         </div>
     </div>
 </div>
 
 <script>
-function timeseriesFilter(diseaseName) {
-    return {
-        availableStates: [],
-        selectedStates: [],
-        chartData: null,
-        init() {
-            const dataEl = document.getElementById('timeseries-data');
-            if (dataEl) {
-                this.chartData = JSON.parse(dataEl.textContent);
-                this.availableStates = this.chartData.available_states || [];
-                this.selectedStates = [...this.availableStates];
-            }
-        },
-        toggleState(state) {
-            if (this.selectedStates.includes(state)) {
-                this.selectedStates = this.selectedStates.filter(s => s !== state);
-            } else {
-                this.selectedStates = [...this.selectedStates, state];
-            }
-        },
-        renderChart() {
-            if (this.chartData && this.$refs.chart) {
-                const svg = createStateTrendChart(this.chartData, diseaseName, this.selectedStates);
-                this.$refs.chart.replaceChildren(svg);
-            }
-        }
+(function() {
+    const dataEl = document.getElementById('timeseries-data');
+    if (!dataEl) return;
+
+    const data = JSON.parse(dataEl.textContent);
+    if (!data || !data.states) {
+        console.warn('No timeseries data available');
+        return;
     }
-}
+
+    // Initialize DC.js charts
+    const charts = createDCStateTrendChart(
+        data,
+        '#state-trend-chart',
+        '#state-filter'
+    );
+
+    // Reset button
+    const resetBtn = document.getElementById('reset-state-filter');
+    if (resetBtn && charts) {
+        resetBtn.addEventListener('click', () => {
+            charts.reset();
+        });
+    }
+})();
 </script>
