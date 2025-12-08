@@ -155,9 +155,7 @@ async def get_state_map_chart(
         db.get_state_case_totals, disease_name, None, start_date, end_date
     )
     # Fetch time series for the brush context chart
-    timeseries_data = await run_db_query(
-        db.get_national_disease_timeseries, disease_name, "month"
-    )
+    timeseries_data = await run_db_query(db.get_national_disease_timeseries, disease_name, "month")
 
     return templates.TemplateResponse(
         request,
