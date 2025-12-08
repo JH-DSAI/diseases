@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@uwdata/mosaic-core": "^0.13.0",
+    "@uwdata/mosaic-sql": "^0.13.0",
     "alpinejs": "^3.15.0",
-    "crossfilter2": "^1.5.4",
     "d3": "^7.9.0",
-    "dc": "^4.2.7",
     "htmx.org": "^2.0.8",
     "topojson-client": "^3.1.0"
   },

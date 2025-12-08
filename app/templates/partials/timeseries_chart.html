@@ -1,16 +1,6 @@
-{# Time series chart by state - DC.js with crossfilter #}
+{# Time series chart by state - Loader/Action/Render pattern #}
 
-<style>
-/* Fix DC.js series chart to render as lines, not filled areas */
-#state-trend-chart .chart-body path.line {
-    fill: none !important;
-    stroke-width: 2px;
-}
-#state-trend-chart .chart-body path.area {
-    display: none !important;
-}
-</style>
-
+{# Embedded JSON from server - used by loader() #}
 <script type="application/json" id="timeseries-data">{{ chart_data | tojson }}</script>
 
 <div class="card bg-base-100 shadow-xl">
@@ -24,13 +14,13 @@
         </p>
 
         <div class="flex gap-4 overflow-hidden">
-            <!-- State filter (DC row chart) -->
+            {# State filter (row chart) #}
             <div class="shrink-0" style="width: 180px;">
                 <button id="reset-state-filter" class="btn btn-xs btn-ghost mb-2">Reset Filters</button>
                 <div id="state-filter" class="overflow-y-auto" style="max-height: 350px;"></div>
             </div>
 
-            <!-- Main series chart -->
+            {# Main line chart #}
             <div id="state-trend-chart" class="flex-1 overflow-hidden"></div>
         </div>
     </div>
@@ -38,27 +28,44 @@
 
 <script>
 (function() {
+    const { loader, action, render } = window.StateTrendChart;
+
+    // Parse embedded JSON (already loaded with HTMX partial!)
     const dataEl = document.getElementById('timeseries-data');
     if (!dataEl) return;
 
-    const data = JSON.parse(dataEl.textContent);
-    if (!data || !data.states) {
+    const embeddedData = JSON.parse(dataEl.textContent);
+    if (!embeddedData || !embeddedData.states) {
         console.warn('No timeseries data available');
         return;
     }
 
-    // Initialize DC.js charts
-    const charts = createDCStateTrendChart(
-        data,
-        '#state-trend-chart',
-        '#state-filter'
-    );
+    // Loader uses embedded data - no fetch!
+    const context = loader(embeddedData, '{{ disease_slug }}');
+    let data = { rowData: context.rowData, lineData: context.lineData };
+
+    // Dispatch actions -> update UI
+    const dispatch = async (type, payload) => {
+        data = await action(type, payload, context);
+        updateUI();
+    };
+
+    function updateUI() {
+        const { rowSvg, lineSvg } = render(data, dispatch, {
+            selectedStates: context.selectedStates
+        });
+        document.getElementById('state-filter').replaceChildren(rowSvg);
+        document.getElementById('state-trend-chart').replaceChildren(lineSvg);
+    }
+
+    // Initial render - synchronous, from embedded data!
+    updateUI();
 
     // Reset button
     const resetBtn = document.getElementById('reset-state-filter');
-    if (resetBtn && charts) {
+    if (resetBtn) {
         resetBtn.addEventListener('click', () => {
-            charts.reset();
+            dispatch('CLEAR_FILTER', {});
         });
     }
 })();

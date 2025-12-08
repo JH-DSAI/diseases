@@ -11,8 +11,18 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/custom.css">
 
-    <!-- Vendor Bundle (HTMX, Alpine.js, D3.js) -->
+    <!-- Vendor Bundle (HTMX, Alpine.js, D3.js, Mosaic) -->
     <script src="/static/dist/vendor.js"></script>
+
+    <!-- Utility Libraries (must load before HTMX processes triggers) -->
+    <script src="/static/js/lib/mosaic-rest-connector.js"></script>
+
+    <!-- Chart Components (must load before HTMX loads partials that use them) -->
+    <script src="/static/js/components/national-trend-chart.js"></script>
+    <script src="/static/js/components/state-trend-chart.js"></script>
+    <script src="/static/js/components/age-group-chart.js"></script>
+    <script src="/static/js/components/serotype-chart.js"></script>
+    <script src="/static/js/components/usa-map-chart.js"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
@@ -49,14 +59,6 @@
 
     <!-- Custom JavaScript -->
     <script src="/static/js/app.js"></script>
-
-    <!-- Chart Components -->
-    <script src="/static/js/components/national-trend-chart.js"></script>
-    <script src="/static/js/components/state-trend-chart.js"></script>
-    <script src="/static/js/components/dc-state-trend-chart.js"></script>
-    <script src="/static/js/components/age-group-chart.js"></script>
-    <script src="/static/js/components/serotype-chart.js"></script>
-    <script src="/static/js/components/usa-map-chart.js"></script>
 
     {% block extra_scripts %}{% endblock %}
 </body>
