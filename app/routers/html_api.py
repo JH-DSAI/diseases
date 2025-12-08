@@ -132,3 +132,23 @@ async def get_serotype_chart(request: Request, disease_slug: str, _db=Depends(ge
             "chart_data": chart_data,
         },
     )
+
+
+@router.get("/disease/{disease_slug}/state-map", response_class=HTMLResponse)
+async def get_state_map_chart(request: Request, disease_slug: str, _db=Depends(get_db)):
+    """
+    Returns HTML fragment containing USA choropleth map with embedded data.
+    Used by HTMX to populate the map section on disease detail page.
+    """
+    disease_name = await get_disease_name_or_404(disease_slug)
+    chart_data = await run_db_query(db.get_state_case_totals, disease_name)
+
+    return templates.TemplateResponse(
+        request,
+        "partials/usa_map_chart.html",
+        {
+            "disease_slug": disease_slug,
+            "disease_name": disease_name,
+            "chart_data": chart_data,
+        },
+    )

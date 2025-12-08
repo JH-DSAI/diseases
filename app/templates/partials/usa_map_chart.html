@@ -1,0 +1,60 @@
+{# USA choropleth map - data embedded in response #}
+
+<script type="application/json" id="usa-map-data">{{ chart_data | tojson }}</script>
+
+<!-- Tooltip element (shared across map) -->
+<div id="usa-map-tooltip"
+     style="position: fixed; visibility: hidden; background-color: rgba(0, 0, 0, 0.85); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 1000; max-width: 200px;">
+</div>
+
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h3 class="card-title mb-4">Cases by State</h3>
+
+        {% if chart_data.available_states %}
+        <div x-data="usaMapChart('{{ disease_name }}')" x-init="init()">
+            <div x-ref="chart" class="w-full" style="min-height: 500px;">
+                <div class="flex items-center justify-center h-96">
+                    <span class="loading loading-spinner loading-lg"></span>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="h-64 flex items-center justify-center bg-base-200 rounded">
+            <p class="text-base-content/50">No state data available for this disease</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function usaMapChart(diseaseName) {
+    return {
+        chartData: null,
+        usTopology: null,
+        async init() {
+            const dataEl = document.getElementById('usa-map-data');
+            if (dataEl) {
+                this.chartData = JSON.parse(dataEl.textContent);
+            }
+
+            // Load TopoJSON data
+            try {
+                this.usTopology = await loadUSTopology();
+                this.renderChart();
+            } catch (error) {
+                console.error('Failed to load US topology:', error);
+                if (this.$refs.chart) {
+                    this.$refs.chart.innerHTML = '<p class="text-error text-center py-8">Failed to load map data</p>';
+                }
+            }
+        },
+        renderChart() {
+            if (this.chartData && this.usTopology && this.$refs.chart) {
+                const svg = createUSAMapChart(this.chartData, diseaseName, this.usTopology);
+                this.$refs.chart.replaceChildren(svg);
+            }
+        }
+    }
+}
+</script>

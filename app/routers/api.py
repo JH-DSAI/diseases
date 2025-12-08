@@ -17,6 +17,8 @@ from app.models import (
     HealthResponse,
     NationalDiseaseTimeSeriesDataPoint,
     NationalDiseaseTimeSeriesResponse,
+    StateCaseData,
+    StateCaseTotalsResponse,
     StateTimeSeriesDataPoint,
     SummaryStatsResponse,
 )
@@ -230,3 +232,41 @@ async def get_age_group_distribution(disease_slug: str, data_source: str | None 
     except Exception as e:
         logger.error(f"Error fetching age group distribution for {disease_slug}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch age group distribution") from e
+
+
+@router.get("/disease/{disease_slug}/state-totals", response_model=StateCaseTotalsResponse)
+async def get_state_case_totals(disease_slug: str, data_source: str | None = None):
+    """
+    Get total case counts by state for choropleth map visualization.
+
+    Args:
+        disease_slug: URL-safe slug for the disease
+        data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
+
+    Returns:
+        State-level case totals with FIPS codes for map rendering
+    """
+    try:
+        disease_name = await get_disease_name_or_404(disease_slug)
+        data = await run_db_query(
+            db.get_state_case_totals, disease_name, data_source=data_source
+        )
+
+        # Convert to proper format
+        states_formatted = {
+            state: StateCaseData(**state_data) for state, state_data in data["states"].items()
+        }
+
+        return StateCaseTotalsResponse(
+            disease_name=disease_name,
+            disease_slug=disease_slug,
+            states=states_formatted,
+            max_cases=data["max_cases"],
+            min_cases=data["min_cases"],
+            available_states=data["available_states"],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching state totals for {disease_slug}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch state case totals") from e
