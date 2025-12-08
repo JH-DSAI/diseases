@@ -235,13 +235,20 @@ async def get_age_group_distribution(disease_slug: str, data_source: str | None 
 
 
 @router.get("/disease/{disease_slug}/state-totals", response_model=StateCaseTotalsResponse)
-async def get_state_case_totals(disease_slug: str, data_source: str | None = None):
+async def get_state_case_totals(
+    disease_slug: str,
+    data_source: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
     """
     Get total case counts by state for choropleth map visualization.
 
     Args:
         disease_slug: URL-safe slug for the disease
         data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
+        start_date: Optional start date filter (ISO format YYYY-MM-DD)
+        end_date: Optional end date filter (ISO format YYYY-MM-DD)
 
     Returns:
         State-level case totals with FIPS codes for map rendering
@@ -249,7 +256,11 @@ async def get_state_case_totals(disease_slug: str, data_source: str | None = Non
     try:
         disease_name = await get_disease_name_or_404(disease_slug)
         data = await run_db_query(
-            db.get_state_case_totals, disease_name, data_source=data_source
+            db.get_state_case_totals,
+            disease_name,
+            data_source=data_source,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         # Convert to proper format

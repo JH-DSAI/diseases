@@ -407,7 +407,10 @@ class DiseaseDatabase:
                 result = self.conn.execute(query, [disease_name]).fetchall()
 
             return [
-                {"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0}
+                {
+                    "period": row[0].strftime("%Y-%m-%d") if row[0] else None,
+                    "total_cases": int(row[1]) if row[1] else 0,
+                }
                 for row in result
             ]
 
@@ -592,7 +595,10 @@ class DiseaseDatabase:
                 if state not in states_data:
                     states_data[state] = []
                 states_data[state].append(
-                    {"period": str(period), "cases": int(cases) if cases else 0}
+                    {
+                        "period": period.strftime("%Y-%m-%d") if period else None,
+                        "cases": int(cases) if cases else 0,
+                    }
                 )
 
             national_result = self.conn.execute(
@@ -606,7 +612,10 @@ class DiseaseDatabase:
                 params,
             ).fetchall()
             national_data = [
-                {"period": str(row[0]), "cases": int(row[1]) if row[1] else 0}
+                {
+                    "period": row[0].strftime("%Y-%m-%d") if row[0] else None,
+                    "cases": int(row[1]) if row[1] else 0,
+                }
                 for row in national_result
             ]
 
@@ -709,7 +718,11 @@ class DiseaseDatabase:
             }
 
     def get_state_case_totals(
-        self, disease_name: str, data_source: str | None = None
+        self,
+        disease_name: str,
+        data_source: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get total case counts by state for a disease (for choropleth map).
 
@@ -719,6 +732,8 @@ class DiseaseDatabase:
         Args:
             disease_name: Name of the disease
             data_source: Optional filter by data source
+            start_date: Optional start date filter (ISO format YYYY-MM-DD)
+            end_date: Optional end date filter (ISO format YYYY-MM-DD)
 
         Returns:
             Dictionary with:
@@ -733,12 +748,23 @@ class DiseaseDatabase:
         from app.etl.normalizers.fips import STATE_TO_FIPS
 
         with self._lock:
-            where_clause = (
-                "WHERE disease_name = ?"
-                if not data_source
-                else "WHERE disease_name = ? AND data_source = ?"
-            )
-            params = [disease_name] if not data_source else [disease_name, data_source]
+            # Build WHERE clause dynamically
+            conditions = ["disease_name = ?"]
+            params = [disease_name]
+
+            if data_source:
+                conditions.append("data_source = ?")
+                params.append(data_source)
+
+            if start_date:
+                conditions.append("report_period_start >= ?")
+                params.append(start_date)
+
+            if end_date:
+                conditions.append("report_period_end <= ?")
+                params.append(end_date)
+
+            where_clause = "WHERE " + " AND ".join(conditions)
 
             result = self.conn.execute(
                 f"""

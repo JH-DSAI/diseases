@@ -135,13 +135,29 @@ async def get_serotype_chart(request: Request, disease_slug: str, _db=Depends(ge
 
 
 @router.get("/disease/{disease_slug}/state-map", response_class=HTMLResponse)
-async def get_state_map_chart(request: Request, disease_slug: str, _db=Depends(get_db)):
+async def get_state_map_chart(
+    request: Request,
+    disease_slug: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    _db=Depends(get_db),
+):
     """
     Returns HTML fragment containing USA choropleth map with embedded data.
     Used by HTMX to populate the map section on disease detail page.
+
+    Args:
+        start_date: Optional start date filter (ISO format YYYY-MM-DD)
+        end_date: Optional end date filter (ISO format YYYY-MM-DD)
     """
     disease_name = await get_disease_name_or_404(disease_slug)
-    chart_data = await run_db_query(db.get_state_case_totals, disease_name)
+    chart_data = await run_db_query(
+        db.get_state_case_totals, disease_name, None, start_date, end_date
+    )
+    # Fetch time series for the brush context chart
+    timeseries_data = await run_db_query(
+        db.get_national_disease_timeseries, disease_name, "month"
+    )
 
     return templates.TemplateResponse(
         request,
@@ -150,5 +166,8 @@ async def get_state_map_chart(request: Request, disease_slug: str, _db=Depends(g
             "disease_slug": disease_slug,
             "disease_name": disease_name,
             "chart_data": chart_data,
+            "timeseries_data": timeseries_data,
+            "start_date": start_date,
+            "end_date": end_date,
         },
     )

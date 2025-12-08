@@ -1,6 +1,7 @@
-{# USA choropleth map - data embedded in response #}
+{# USA choropleth map with date range brush - data embedded in response #}
 
 <script type="application/json" id="usa-map-data">{{ chart_data | tojson }}</script>
+<script type="application/json" id="usa-map-timeseries">{{ timeseries_data | tojson }}</script>
 
 <!-- Tooltip element (shared across map) -->
 <div id="usa-map-tooltip"
@@ -9,14 +10,27 @@
 
 <div class="card bg-base-100 shadow-xl">
     <div class="card-body">
-        <h3 class="card-title mb-4">Cases by State</h3>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title">Cases by State</h3>
+            <span x-data="{ range: '' }"
+                  x-init="$watch('$store.mapDateRange', value => range = value)"
+                  x-text="range"
+                  class="text-sm text-base-content/70 badge badge-ghost">
+            </span>
+        </div>
 
         {% if chart_data.available_states %}
-        <div x-data="usaMapChart('{{ disease_name }}')" x-init="init()">
+        <div x-data="usaMapChart('{{ disease_name }}', '{{ disease_slug }}')" x-init="init()">
+            <!-- Map container -->
             <div x-ref="chart" class="w-full" style="min-height: 500px;">
                 <div class="flex items-center justify-center h-96">
                     <span class="loading loading-spinner loading-lg"></span>
                 </div>
+            </div>
+
+            <!-- Brush context chart for date range selection -->
+            <div x-ref="brushChart" class="w-full mt-4 border-t border-base-300 pt-4">
+                <div class="text-xs text-base-content/50 mb-2">Drag to select date range</div>
             </div>
         </div>
         {% else %}
@@ -28,20 +42,36 @@
 </div>
 
 <script>
-function usaMapChart(diseaseName) {
+// Store for date range display (shared across components)
+if (!Alpine.store('mapDateRange')) {
+    Alpine.store('mapDateRange', 'All Time');
+}
+
+function usaMapChart(diseaseName, diseaseSlug) {
     return {
         chartData: null,
+        timeseriesData: null,
         usTopology: null,
+        brushChart: null,
+        isLoading: false,
+
         async init() {
+            // Parse embedded data
             const dataEl = document.getElementById('usa-map-data');
+            const timeseriesEl = document.getElementById('usa-map-timeseries');
+
             if (dataEl) {
                 this.chartData = JSON.parse(dataEl.textContent);
+            }
+            if (timeseriesEl) {
+                this.timeseriesData = JSON.parse(timeseriesEl.textContent);
             }
 
             // Load TopoJSON data
             try {
                 this.usTopology = await loadUSTopology();
                 this.renderChart();
+                this.renderBrushChart();
             } catch (error) {
                 console.error('Failed to load US topology:', error);
                 if (this.$refs.chart) {
@@ -49,10 +79,99 @@ function usaMapChart(diseaseName) {
                 }
             }
         },
+
         renderChart() {
             if (this.chartData && this.usTopology && this.$refs.chart) {
                 const svg = createUSAMapChart(this.chartData, diseaseName, this.usTopology);
                 this.$refs.chart.replaceChildren(svg);
+            }
+        },
+
+        renderBrushChart() {
+            if (!this.timeseriesData || !this.$refs.brushChart) return;
+
+            const brushResult = createBrushContextChart(
+                this.timeseriesData,
+                (startDate, endDate) => this.onBrushChange(startDate, endDate)
+            );
+
+            this.brushChart = brushResult;
+
+            // Keep the label, add the chart
+            const label = this.$refs.brushChart.querySelector('.text-xs');
+            this.$refs.brushChart.replaceChildren();
+            if (label) this.$refs.brushChart.appendChild(label);
+            this.$refs.brushChart.appendChild(brushResult.node);
+
+            // Set initial date range label
+            Alpine.store('mapDateRange', 'All Time');
+        },
+
+        async onBrushChange(startDate, endDate) {
+            if (this.isLoading) return;
+
+            // Format dates for display and API
+            const formatDisplay = d3.timeFormat("%b %Y");
+            const formatApi = d3.timeFormat("%Y-%m-%d");
+
+            // Check if this is the full range (all time)
+            const dataEl = document.getElementById('usa-map-timeseries');
+            if (dataEl) {
+                const timeseriesData = JSON.parse(dataEl.textContent);
+                if (timeseriesData && timeseriesData.length > 0) {
+                    // Date format: YYYY-MM-DD (per Pydantic model)
+                    const parseDate = d3.timeParse("%Y-%m-%d");
+                    const dates = timeseriesData.map(d => parseDate(d.period)).filter(d => d);
+                    const [minDate, maxDate] = d3.extent(dates);
+
+                    // If selection covers full range, show "All Time"
+                    const isFullRange = startDate <= minDate && endDate >= maxDate;
+                    if (isFullRange) {
+                        Alpine.store('mapDateRange', 'All Time');
+                        // Fetch without date filters (full range)
+                        await this.fetchMapData(null, null);
+                        return;
+                    }
+                }
+            }
+
+            // Update display
+            Alpine.store('mapDateRange', `${formatDisplay(startDate)} – ${formatDisplay(endDate)}`);
+
+            // Fetch filtered data
+            await this.fetchMapData(formatApi(startDate), formatApi(endDate));
+        },
+
+        async fetchMapData(startDate, endDate) {
+            this.isLoading = true;
+
+            try {
+                const params = new URLSearchParams();
+                if (startDate) params.set('start_date', startDate);
+                if (endDate) params.set('end_date', endDate);
+
+                const url = `/api/data/disease/${diseaseSlug}/state-totals?${params}`;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Convert API response format to chart format
+                this.chartData = {
+                    states: data.states,
+                    max_cases: data.max_cases,
+                    min_cases: data.min_cases,
+                    available_states: data.available_states
+                };
+
+                this.renderChart();
+            } catch (error) {
+                console.error('Failed to fetch map data:', error);
+            } finally {
+                this.isLoading = false;
             }
         }
     }
