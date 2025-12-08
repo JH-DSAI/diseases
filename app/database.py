@@ -407,7 +407,10 @@ class DiseaseDatabase:
                 result = self.conn.execute(query, [disease_name]).fetchall()
 
             return [
-                {"period": str(row[0]), "total_cases": int(row[1]) if row[1] else 0}
+                {
+                    "period": row[0].strftime("%Y-%m-%d") if row[0] else None,
+                    "total_cases": int(row[1]) if row[1] else 0,
+                }
                 for row in result
             ]
 
@@ -592,7 +595,10 @@ class DiseaseDatabase:
                 if state not in states_data:
                     states_data[state] = []
                 states_data[state].append(
-                    {"period": str(period), "cases": int(cases) if cases else 0}
+                    {
+                        "period": period.strftime("%Y-%m-%d") if period else None,
+                        "cases": int(cases) if cases else 0,
+                    }
                 )
 
             national_result = self.conn.execute(
@@ -606,7 +612,10 @@ class DiseaseDatabase:
                 params,
             ).fetchall()
             national_data = [
-                {"period": str(row[0]), "cases": int(row[1]) if row[1] else 0}
+                {
+                    "period": row[0].strftime("%Y-%m-%d") if row[0] else None,
+                    "cases": int(row[1]) if row[1] else 0,
+                }
                 for row in national_result
             ]
 
@@ -705,6 +714,98 @@ class DiseaseDatabase:
             return {
                 "states": states_data,
                 "serotypes": serotypes,
+                "available_states": available_states,
+            }
+
+    def get_state_case_totals(
+        self,
+        disease_name: str,
+        data_source: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict:
+        """Get total case counts by state for a disease (for choropleth map).
+
+        Returns data suitable for a USA choropleth map, with FIPS codes
+        for TopoJSON compatibility.
+
+        Args:
+            disease_name: Name of the disease
+            data_source: Optional filter by data source
+            start_date: Optional start date filter (ISO format YYYY-MM-DD)
+            end_date: Optional end date filter (ISO format YYYY-MM-DD)
+
+        Returns:
+            Dictionary with:
+            - states: Dict mapping state code to {cases: int, fips: str}
+            - max_cases: Maximum case count (for scale domain)
+            - min_cases: Minimum non-zero case count
+            - available_states: List of states with data
+        """
+        if not self._initialized:
+            return {"states": {}, "max_cases": 0, "min_cases": 0, "available_states": []}
+
+        from app.etl.normalizers.fips import STATE_TO_FIPS
+
+        with self._lock:
+            # Build WHERE clause dynamically
+            conditions = ["disease_name = ?"]
+            params = [disease_name]
+
+            if data_source:
+                conditions.append("data_source = ?")
+                params.append(data_source)
+
+            if start_date:
+                conditions.append("report_period_start >= ?")
+                params.append(start_date)
+
+            if end_date:
+                conditions.append("report_period_end <= ?")
+                params.append(end_date)
+
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+            result = self.conn.execute(
+                f"""
+                SELECT state, SUM(count) as total_cases
+                FROM disease_data
+                {where_clause}
+                  AND state IS NOT NULL
+                  AND state != ''
+                GROUP BY state
+                ORDER BY state
+            """,
+                params,
+            ).fetchall()
+
+            states_data = {}
+            available_states = []
+            max_cases = 0
+            min_cases = float("inf")
+
+            for row in result:
+                state_code = row[0]
+                cases = int(row[1]) if row[1] else 0
+                fips = STATE_TO_FIPS.get(state_code)
+
+                # Only include states with valid FIPS codes (excludes NYC, regions, etc.)
+                if fips and cases > 0:
+                    states_data[state_code] = {
+                        "cases": cases,
+                        "fips": fips,
+                    }
+                    available_states.append(state_code)
+                    max_cases = max(max_cases, cases)
+                    min_cases = min(min_cases, cases)
+
+            if min_cases == float("inf"):
+                min_cases = 0
+
+            return {
+                "states": states_data,
+                "max_cases": max_cases,
+                "min_cases": min_cases,
                 "available_states": available_states,
             }
 

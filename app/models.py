@@ -139,6 +139,24 @@ class AgeGroupDistributionResponse(BaseModel):
     )
 
 
+class StateCaseData(BaseModel):
+    """State case data for choropleth map"""
+
+    cases: int = Field(..., description="Total cases in this state")
+    fips: str = Field(..., description="2-digit FIPS code for TopoJSON")
+
+
+class StateCaseTotalsResponse(BaseModel):
+    """State case totals response model for choropleth map"""
+
+    disease_name: str = Field(..., description="Disease name")
+    disease_slug: str = Field(..., description="URL-safe disease slug")
+    states: dict[str, StateCaseData] = Field(..., description="Case totals by state code")
+    max_cases: int = Field(..., description="Maximum case count across states")
+    min_cases: int = Field(..., description="Minimum non-zero case count")
+    available_states: list[str] = Field(..., description="List of states with data")
+
+
 class ErrorResponse(BaseModel):
     """Error response model"""
 

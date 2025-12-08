@@ -12,6 +12,9 @@ import Alpine from 'alpinejs';
 // D3.js - Data visualizations
 import * as d3 from 'd3';
 
+// TopoJSON - For map rendering
+import * as topojson from 'topojson-client';
+
 // Expose Alpine globally
 window.Alpine = Alpine;
 
@@ -26,4 +29,7 @@ if (document.readyState === 'loading') {
 // Expose D3 globally for existing chart code
 window.d3 = d3;
 
-console.log('Vendor bundle loaded: HTMX, Alpine.js, D3.js');
+// Expose TopoJSON globally for map rendering
+window.topojson = topojson;
+
+console.log('Vendor bundle loaded: HTMX, Alpine.js, D3.js, TopoJSON');
