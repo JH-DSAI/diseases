@@ -15,6 +15,14 @@ import * as d3 from 'd3';
 // TopoJSON - For map rendering
 import * as topojson from 'topojson-client';
 
+// Crossfilter - Multi-dimensional filtering
+import crossfilter from 'crossfilter2';
+
+// DC.js - Dimensional charting with crossfilter
+import * as dc from 'dc';
+import 'dc/src/compat/d3v6';  // D3 v6+ compatibility layer
+import 'dc/dist/style/dc.css';
+
 // Expose Alpine globally
 window.Alpine = Alpine;
 
@@ -32,4 +40,10 @@ window.d3 = d3;
 // Expose TopoJSON globally for map rendering
 window.topojson = topojson;
 
-console.log('Vendor bundle loaded: HTMX, Alpine.js, D3.js, TopoJSON');
+// Expose Crossfilter globally for DC.js
+window.crossfilter = crossfilter;
+
+// Expose DC.js globally for dimensional charting
+window.dc = dc;
+
+console.log('Vendor bundle loaded: HTMX, Alpine.js, D3.js, TopoJSON, Crossfilter, DC.js');
