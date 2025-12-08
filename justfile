@@ -36,8 +36,9 @@ test-cov:
     uv run pytest --cov-report=html
     @echo "Coverage report generated in htmlcov/"
 
-# Build frontend assets
+# Build frontend assets (clean first)
 js-build:
+    rm -rf app/static/dist
     npm run build
 
 js-install:

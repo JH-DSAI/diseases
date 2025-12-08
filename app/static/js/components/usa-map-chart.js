@@ -23,19 +23,13 @@ const STATE_TO_FIPS = Object.fromEntries(
     Object.entries(FIPS_TO_STATE).map(([k, v]) => [v, k])
 );
 
-// Cache for TopoJSON data
-let _usTopologyCache = null;
-
 /**
- * Load US TopoJSON data (cached)
- * @returns {Promise<Object>} The TopoJSON data
+ * Get US TopoJSON data (bundled, no fetch needed)
+ * @returns {Object} The TopoJSON data
  */
-async function loadUSTopology() {
-    if (_usTopologyCache) {
-        return _usTopologyCache;
-    }
-    _usTopologyCache = await d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-albers-10m.json");
-    return _usTopologyCache;
+function loadUSTopology() {
+    // Use pre-bundled topology from vendor.js (us-atlas npm package)
+    return window.usStatesTopology;
 }
 
 /**

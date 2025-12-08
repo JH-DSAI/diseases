@@ -1,0 +1,62 @@
+{# State selector component - Loader/Action/Render pattern #}
+{# Publishes selection to MosaicState for cross-chart filtering #}
+
+{# Embedded JSON from server - list of states with totals #}
+<script type="application/json" id="state-selector-data">{{ states | tojson }}</script>
+
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="card-title text-base">Filter by State</h3>
+            <button id="clear-state-selection" class="btn btn-xs btn-ghost">Clear</button>
+        </div>
+
+        <p class="text-sm text-base-content/70 mb-3">
+            Click to select. Shift+click for multi-select.
+        </p>
+
+        <div id="state-selector-grid" class="max-h-48 overflow-y-auto"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const { loader, action, render } = window.StateSelector;
+
+    // Parse embedded JSON
+    const dataEl = document.getElementById('state-selector-data');
+    if (!dataEl) return;
+
+    const embeddedData = JSON.parse(dataEl.textContent);
+    if (!embeddedData || embeddedData.length === 0) {
+        console.warn('No state selector data available');
+        return;
+    }
+
+    // Initialize context
+    const context = loader(embeddedData);
+
+    // Dispatch actions
+    const dispatch = (type, payload) => {
+        action(type, payload, context);
+        // Note: updateUI is called by MosaicState subscription, not here
+    };
+
+    // Render function
+    function updateUI(selectedStates) {
+        const grid = render(context, dispatch, selectedStates);
+        document.getElementById('state-selector-grid').replaceChildren(grid);
+    }
+
+    // Subscribe to MosaicState for selection changes
+    window.MosaicState.subscribeToStateSelection(updateUI);
+
+    // Clear button
+    const clearBtn = document.getElementById('clear-state-selection');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            dispatch('CLEAR', {});
+        });
+    }
+})();
+</script>
