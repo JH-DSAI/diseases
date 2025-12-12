@@ -58,14 +58,17 @@ class TestNNDSSTransformer:
         df = transformer.load()
         assert (df["data_source"] == "nndss").all()
 
-    def test_geo_unit_classification(self, nndss_fixtures_dir: Path):
-        """Test geographic unit classification."""
+    def test_geo_unit_is_state_only(self, nndss_fixtures_dir: Path):
+        """Test only state-level records are included (regions/national filtered)."""
         transformer = NNDSSTransformer(nndss_fixtures_dir)
         df = transformer.load()
 
         geo_units = df["geo_unit"].unique()
-        # Fixture contains state, region, and national records
-        assert "state" in geo_units
+        # Only state records should remain after filtering
+        assert list(geo_units) == ["state"]
+        # Verify regional/national records were filtered out
+        assert "region" not in geo_units
+        assert "national" not in geo_units
 
     def test_state_code_conversion(self, nndss_fixtures_dir: Path):
         """Test state names are converted to codes."""

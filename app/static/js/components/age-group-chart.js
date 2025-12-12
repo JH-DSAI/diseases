@@ -36,18 +36,8 @@ function createAgeGroupChart(data, diseaseName, selectedStates = [], options = {
         return svg.node();
     }
 
-    // Filter for selected states
-    const statesToShow = selectedStates.length > 0 ? selectedStates : [];
-
-    if (statesToShow.length === 0) {
-        svg.append("text")
-            .attr("x", width / 2)
-            .attr("y", height / 2)
-            .attr("text-anchor", "middle")
-            .style("font-size", "14px")
-            .text("Select states to view age group distribution");
-        return svg.node();
-    }
+    // Filter for selected states - show all if none selected
+    const statesToShow = selectedStates.length > 0 ? selectedStates : data.available_states;
 
     const g = svg.append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);

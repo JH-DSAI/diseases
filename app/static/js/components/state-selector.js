@@ -65,7 +65,8 @@ function render(context, dispatch, selectedStates = new Set()) {
 
     // Create container
     const container = document.createElement('div');
-    container.className = 'grid grid-cols-5 gap-2';
+    container.className = 'grid gap-2';
+    container.style.gridTemplateColumns = 'repeat(7, minmax(0, 1fr))';
 
     states.forEach(({ state, total }) => {
         const isSelected = selectedStates.has(state);
