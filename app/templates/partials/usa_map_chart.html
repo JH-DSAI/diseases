@@ -86,6 +86,8 @@
 
     async function fetchMapData(startDate, endDate) {
         isLoading = true;
+        // Preserve scroll position before async operation
+        const scrollY = window.scrollY;
 
         try {
             const formatApi = d3.timeFormat("%Y-%m-%d");
@@ -111,6 +113,10 @@
             };
 
             renderChart();
+            // Restore scroll position after render
+            requestAnimationFrame(() => {
+                window.scrollTo(0, scrollY);
+            });
         } catch (error) {
             console.error('Failed to fetch map data:', error);
         } finally {

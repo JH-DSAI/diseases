@@ -107,6 +107,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial setup
     window.persistedParams.init();
 
+    // Initialize URL state manager for filter persistence
+    // This restores state/date filters from URL query params
+    if (window.URLStateManager) {
+        window.URLStateManager.init();
+    }
+
     // Listen for HTMX pushUrl events to sync params
     document.body.addEventListener('htmx:pushedIntoHistory', function() {
         window.persistedParams.init();
