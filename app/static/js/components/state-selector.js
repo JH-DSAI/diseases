@@ -9,7 +9,7 @@
  * Loader: Process embedded JSON data from HTML partial.
  *
  * @param {Array} embeddedData - Array of { state, total } objects
- * @returns {Object} Context with states and color scale
+ * @returns {Object} Context with states
  */
 function loader(embeddedData) {
     // Sort states: National first, then by total descending
@@ -19,15 +19,8 @@ function loader(embeddedData) {
         return b.total - a.total;
     });
 
-    // Create stable color scale based on sorted order
-    const colorScale = new Map();
-    states.forEach((s, i) => {
-        colorScale.set(s.state, AppConstants.STATE_COLORS[i % AppConstants.STATE_COLORS.length]);
-    });
-
     return {
         states,
-        colorScale,
         originalData: embeddedData
     };
 }
@@ -68,7 +61,7 @@ function action(type, payload, context) {
  * @returns {HTMLElement} Grid container element
  */
 function render(context, dispatch, selectedStates = new Set()) {
-    const { states, colorScale } = context;
+    const { states } = context;
 
     // Create container
     const container = document.createElement('div');
@@ -77,7 +70,7 @@ function render(context, dispatch, selectedStates = new Set()) {
     states.forEach(({ state, total }) => {
         const isSelected = selectedStates.has(state);
         const isNational = state === 'National';
-        const color = colorScale.get(state);
+        const color = window.StateColors.getStateColor(state);
 
         // Create chip button
         const chip = document.createElement('button');
