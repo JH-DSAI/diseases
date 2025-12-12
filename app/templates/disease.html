@@ -56,6 +56,21 @@
         </div>
     </div>
 
+    <!-- Date Range Selector - loaded via HTMX -->
+    <div hx-get="/api/html/disease/{{ disease_slug }}/date-range-selector"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <!-- Loading skeleton -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body py-4">
+                <h3 class="card-title text-sm">Date Range</h3>
+                <div class="flex items-center justify-center h-20">
+                    <span class="loading loading-spinner loading-md"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Time Series Chart - loaded via HTMX -->
     <div hx-get="/api/html/disease/{{ disease_slug }}/timeseries?granularity=month"
          hx-trigger="load"
