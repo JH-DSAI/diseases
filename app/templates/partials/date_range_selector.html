@@ -38,9 +38,14 @@
     // Initialize context
     const context = loader(embeddedData);
 
-    // Dispatch function
+    // Track if we're the source of the date range change to avoid feedback loops
+    let isLocalChange = false;
+
+    // Dispatch function - wrapped to track local changes
     function dispatch(type, payload) {
+        isLocalChange = true;
         action(type, payload, context);
+        isLocalChange = false;
     }
 
     // Render the brush chart
@@ -59,7 +64,7 @@
         ? `${formatDisplay(context.dateExtent[0])} – ${formatDisplay(context.dateExtent[1])}`
         : 'All Time';
 
-    // Subscribe to date range changes to update display
+    // Subscribe to date range changes to update display and brush position
     window.MosaicState.subscribeToDateRange((dateRange) => {
         const displayEl = document.getElementById('date-range-display');
         if (displayEl) {
@@ -69,6 +74,12 @@
             } else {
                 displayEl.textContent = fullRangeText;
             }
+        }
+
+        // Sync brush position if this change came from outside (e.g., URL restore)
+        // Skip if we triggered this change ourselves
+        if (!isLocalChange) {
+            setBrushRange(dateRange.startDate, dateRange.endDate);
         }
     });
 
