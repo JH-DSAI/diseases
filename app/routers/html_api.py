@@ -145,10 +145,11 @@ async def get_state_selector(request: Request, disease_slug: str, _db=Depends(ge
     state_data = await run_db_query(db.get_state_case_totals, disease_name)
 
     # Transform to list of {state, total} for the selector component
-    states = [{"state": "National", "total": sum(s["cases"] for s in state_data["states"].values())}]
+    states = [
+        {"state": "National", "total": sum(s["cases"] for s in state_data["states"].values())}
+    ]
     states.extend(
-        {"state": state, "total": data["cases"]}
-        for state, data in state_data["states"].items()
+        {"state": state, "total": data["cases"]} for state, data in state_data["states"].items()
     )
 
     return templates.TemplateResponse(

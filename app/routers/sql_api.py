@@ -22,25 +22,29 @@ router = APIRouter(
 )
 
 # Allowed table names for queries
-ALLOWED_TABLES = frozenset([
-    "disease_data",
-    "disease_mapping",
-])
+ALLOWED_TABLES = frozenset(
+    [
+        "disease_data",
+        "disease_mapping",
+    ]
+)
 
 # SQL keywords that indicate mutation (not allowed)
-FORBIDDEN_KEYWORDS = frozenset([
-    "INSERT",
-    "UPDATE",
-    "DELETE",
-    "DROP",
-    "CREATE",
-    "ALTER",
-    "TRUNCATE",
-    "GRANT",
-    "REVOKE",
-    "EXECUTE",
-    "EXEC",
-])
+FORBIDDEN_KEYWORDS = frozenset(
+    [
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "CREATE",
+        "ALTER",
+        "TRUNCATE",
+        "GRANT",
+        "REVOKE",
+        "EXECUTE",
+        "EXEC",
+    ]
+)
 
 
 class QueryRequest(BaseModel):
@@ -116,16 +120,12 @@ def validate_tables_in_query(sql: str) -> None:
     disallowed = tables_found - ALLOWED_TABLES
     if disallowed:
         raise HTTPException(
-            status_code=400,
-            detail=f"Query references disallowed tables: {', '.join(disallowed)}"
+            status_code=400, detail=f"Query references disallowed tables: {', '.join(disallowed)}"
         )
 
 
 @router.post("/query", response_model=QueryResponse)
-async def execute_query(
-    request: QueryRequest,
-    _db=Depends(get_db)
-) -> QueryResponse:
+async def execute_query(request: QueryRequest, _db=Depends(get_db)) -> QueryResponse:
     """
     Execute a SQL query and return results.
 
@@ -150,14 +150,9 @@ async def execute_query(
         result = await run_db_query(db.execute_sql, request.sql)
 
         return QueryResponse(
-            data=result["data"],
-            columns=result["columns"],
-            row_count=result["row_count"]
+            data=result["data"], columns=result["columns"], row_count=result["row_count"]
         )
 
     except Exception as e:
         logger.error(f"Query execution failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Query execution failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Query execution failed: {str(e)}") from e
