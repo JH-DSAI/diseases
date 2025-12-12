@@ -861,16 +861,12 @@ class DiseaseDatabase:
                 for i, col in enumerate(columns):
                     value = row[i]
                     # Handle datetime serialization
-                    if hasattr(value, 'strftime'):
+                    if hasattr(value, "strftime"):
                         value = value.strftime("%Y-%m-%d")
                     row_dict[col] = value
                 data.append(row_dict)
 
-            return {
-                "data": data,
-                "columns": columns,
-                "row_count": len(data)
-            }
+            return {"data": data, "columns": columns, "row_count": len(data)}
 
     def close(self):
         """Close database connection."""
