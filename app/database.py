@@ -478,19 +478,41 @@ class DiseaseDatabase:
             }
 
     def get_age_group_distribution_by_state(
-        self, disease_name: str, data_source: str | None = None
+        self,
+        disease_name: str,
+        data_source: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
-        """Get age group distribution by state for a disease."""
+        """Get age group distribution by state for a disease.
+
+        Args:
+            disease_name: Name of the disease
+            data_source: Optional filter by data source
+            start_date: Optional start date filter (ISO format YYYY-MM-DD)
+            end_date: Optional end date filter (ISO format YYYY-MM-DD)
+        """
         if not self._initialized:
             return {"states": {}, "age_groups": [], "available_states": []}
 
         with self._lock:
-            where_clause = (
-                "WHERE disease_name = ?"
-                if not data_source
-                else "WHERE disease_name = ? AND data_source = ?"
-            )
-            params = [disease_name] if not data_source else [disease_name, data_source]
+            # Build WHERE clause dynamically
+            conditions = ["disease_name = ?"]
+            params = [disease_name]
+
+            if data_source:
+                conditions.append("data_source = ?")
+                params.append(data_source)
+
+            if start_date:
+                conditions.append("report_period_start >= ?")
+                params.append(start_date)
+
+            if end_date:
+                conditions.append("report_period_end <= ?")
+                params.append(end_date)
+
+            where_clause = "WHERE " + " AND ".join(conditions)
 
             states_result = self.conn.execute(
                 f"""

@@ -195,13 +195,20 @@ async def get_disease_stats(disease_slug: str, data_source: str | None = None):
 
 
 @router.get("/disease/{disease_slug}/age-groups", response_model=AgeGroupDistributionResponse)
-async def get_age_group_distribution(disease_slug: str, data_source: str | None = None):
+async def get_age_group_distribution(
+    disease_slug: str,
+    data_source: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
     """
     Get age group distribution by state for a specific disease.
 
     Args:
         disease_slug: URL-safe slug for the disease
         data_source: Optional filter by data source ('tracker', 'nndss', or None for all)
+        start_date: Optional start date filter (ISO format YYYY-MM-DD)
+        end_date: Optional end date filter (ISO format YYYY-MM-DD)
 
     Returns:
         Age group distribution with percentages for each state
@@ -210,7 +217,11 @@ async def get_age_group_distribution(disease_slug: str, data_source: str | None 
     try:
         disease_name = await get_disease_name_or_404(disease_slug)
         data = await run_db_query(
-            db.get_age_group_distribution_by_state, disease_name, data_source=data_source
+            db.get_age_group_distribution_by_state,
+            disease_name,
+            data_source=data_source,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         # Convert to proper format
