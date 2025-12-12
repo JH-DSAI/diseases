@@ -1,0 +1,84 @@
+{# Date range selector - Loader/Action/Render pattern #}
+{# Publishes to MosaicState for cross-chart date filtering #}
+
+<script type="application/json" id="date-range-timeseries">{{ timeseries_data | tojson }}</script>
+
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body py-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="card-title text-sm">Date Range</h3>
+            <div class="flex items-center gap-2">
+                <span id="date-range-display" class="text-sm text-base-content/70 badge badge-ghost">
+                    All Time
+                </span>
+                <button id="clear-date-range" class="btn btn-xs btn-ghost">All Time</button>
+            </div>
+        </div>
+
+        <div id="date-range-chart" class="w-full">
+            <div class="text-xs text-base-content/50 mb-2">Drag to select date range</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const { loader, action, render } = window.DateRangeSelector;
+
+    // Parse embedded JSON
+    const dataEl = document.getElementById('date-range-timeseries');
+    if (!dataEl) return;
+
+    const embeddedData = JSON.parse(dataEl.textContent);
+    if (!embeddedData || embeddedData.length === 0) {
+        console.warn('No timeseries data available for date range selector');
+        return;
+    }
+
+    // Initialize context
+    const context = loader(embeddedData);
+
+    // Dispatch function
+    function dispatch(type, payload) {
+        action(type, payload, context);
+    }
+
+    // Render the brush chart
+    const container = document.getElementById('date-range-chart');
+    const label = container.querySelector('.text-xs');
+
+    const { node, setBrushRange } = render(context, dispatch);
+
+    container.replaceChildren();
+    if (label) container.appendChild(label);
+    container.appendChild(node);
+
+    // Format for display
+    const formatDisplay = d3.timeFormat("%b %Y");
+    const fullRangeText = context.dateExtent
+        ? `${formatDisplay(context.dateExtent[0])} – ${formatDisplay(context.dateExtent[1])}`
+        : 'All Time';
+
+    // Subscribe to date range changes to update display
+    window.MosaicState.subscribeToDateRange((dateRange) => {
+        const displayEl = document.getElementById('date-range-display');
+        if (displayEl) {
+            // Show actual date range, or full extent if no selection
+            if (dateRange.startDate && dateRange.endDate) {
+                displayEl.textContent = `${formatDisplay(dateRange.startDate)} – ${formatDisplay(dateRange.endDate)}`;
+            } else {
+                displayEl.textContent = fullRangeText;
+            }
+        }
+    });
+
+    // Clear button - reset to all time
+    const clearBtn = document.getElementById('clear-date-range');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            setBrushRange(null, null);  // Reset brush to full extent
+            dispatch('CLEAR', {});       // Clear the date range filter
+        });
+    }
+})();
+</script>
