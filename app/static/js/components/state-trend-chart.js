@@ -121,10 +121,10 @@ function createLineChart(lineData, selectedStates, rowData) {
         .nice()
         .range([innerHeight, 0]);
 
-    // Color scale - use rowData for stable domain
-    const colorScale = d3.scaleOrdinal()
-        .domain(rowData.map(d => d.state))
-        .range(AppConstants.STATE_COLORS);
+    // Color scale - use shared StateColors for consistency with state selector
+    const colorScale = window.StateColors.createStateColorScale(
+        statesData.map(d => d.state)
+    );
 
     // Line generator
     const line = d3.line()
