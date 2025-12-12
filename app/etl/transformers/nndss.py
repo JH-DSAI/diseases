@@ -141,7 +141,9 @@ class NNDSSTransformer(DataSourceTransformer):
         # Filter to state-level records only (exclude regional aggregates and national totals)
         pre_filter_count = len(df)
         df = df[df["geo_unit"] == "state"]
-        logger.info(f"Filtered {pre_filter_count - len(df)} non-state records (regions, national totals)")
+        logger.info(
+            f"Filtered {pre_filter_count - len(df)} non-state records (regions, national totals)"
+        )
 
         logger.info(f"Transformed to {len(df)} records")
         return df
