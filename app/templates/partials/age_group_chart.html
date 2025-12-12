@@ -12,27 +12,94 @@
 
 <script>
 (function() {
+    const diseaseSlug = '{{ disease_slug }}';
+    const diseaseName = '{{ disease_name }}';
+
     // Parse embedded JSON
     const dataEl = document.getElementById('age-group-data');
     if (!dataEl) return;
 
-    const chartData = JSON.parse(dataEl.textContent);
+    let chartData = JSON.parse(dataEl.textContent);
     if (!chartData || !chartData.states) {
         console.warn('No age group data available');
         return;
     }
 
-    const diseaseName = '{{ disease_name }}';
+    let currentSelectedStates = new Set();
+    let currentDateRange = { startDate: null, endDate: null };
+    let isLoading = false;
 
     // Render function
-    function updateUI(selectedStates) {
-        // Convert Set to Array for the chart function
-        const statesArray = Array.from(selectedStates);
+    function renderChart() {
+        const statesArray = Array.from(currentSelectedStates);
         const svg = createAgeGroupChart(chartData, diseaseName, statesArray);
         document.getElementById('age-group-chart').replaceChildren(svg);
     }
 
+    // Handle state selection changes
+    function onStateSelectionChange(selectedStates) {
+        currentSelectedStates = selectedStates;
+        renderChart();
+    }
+
+    // Handle date range changes
+    async function onDateRangeChange(dateRange) {
+        if (isLoading) return;
+
+        const { startDate, endDate } = dateRange;
+
+        // If no date range set (all time), use original embedded data
+        if (!startDate || !endDate) {
+            chartData = JSON.parse(dataEl.textContent);
+            currentDateRange = dateRange;
+            renderChart();
+            return;
+        }
+
+        // Fetch filtered data
+        currentDateRange = dateRange;
+        await fetchAgeGroupData(startDate, endDate);
+    }
+
+    async function fetchAgeGroupData(startDate, endDate) {
+        isLoading = true;
+        const scrollY = window.scrollY;
+
+        try {
+            const formatApi = d3.timeFormat("%Y-%m-%d");
+            const params = new URLSearchParams();
+            params.set('start_date', formatApi(startDate));
+            params.set('end_date', formatApi(endDate));
+
+            const url = `/api/data/disease/${diseaseSlug}/age-groups?${params}`;
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Convert API response to chart format
+            chartData = {
+                states: data.states,
+                age_groups: data.age_groups,
+                available_states: data.available_states
+            };
+
+            renderChart();
+            requestAnimationFrame(() => {
+                window.scrollTo(0, scrollY);
+            });
+        } catch (error) {
+            console.error('Failed to fetch age group data:', error);
+        } finally {
+            isLoading = false;
+        }
+    }
+
     // Subscribe to MosaicState for selection changes
-    window.MosaicState.subscribeToStateSelection(updateUI);
+    window.MosaicState.subscribeToStateSelection(onStateSelectionChange);
+    window.MosaicState.subscribeToDateRange(onDateRangeChange);
 })();
 </script>

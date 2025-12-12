@@ -63,15 +63,28 @@ function filterLineData(originalLineData, selectedStates) {
 }
 
 /**
+ * Filter line data based on date range.
+ */
+function filterByDateRange(lineData, dateRange) {
+    const { startDate, endDate } = dateRange;
+    if (!startDate || !endDate) {
+        return lineData;
+    }
+    return lineData.filter(d => d.date >= startDate && d.date <= endDate);
+}
+
+/**
  * Render: Create the line chart SVG.
  *
  * @param {Object} context - Context from loader
  * @param {Set} selectedStates - Currently selected states from MosaicState
+ * @param {Object} dateRange - { startDate, endDate } from MosaicState
  * @returns {SVGElement} Line chart SVG element
  */
-function render(context, selectedStates = new Set()) {
+function render(context, selectedStates = new Set(), dateRange = {}) {
     const { rowData, originalData } = context;
-    const lineData = filterLineData(originalData.lineData, selectedStates);
+    let lineData = filterLineData(originalData.lineData, selectedStates);
+    lineData = filterByDateRange(lineData, dateRange);
 
     return createLineChart(lineData, selectedStates, rowData);
 }

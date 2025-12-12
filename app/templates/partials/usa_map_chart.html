@@ -42,12 +42,16 @@
 
     let usTopology = null;
     let isLoading = false;
+    let currentSelectedStates = new Set();
 
     // Initialize
     async function init() {
         try {
             usTopology = await loadUSTopology();
             renderChart();
+
+            // Subscribe to state selection changes
+            window.MosaicState.subscribeToStateSelection(onStateSelectionChange);
 
             // Subscribe to date range changes
             window.MosaicState.subscribeToDateRange(onDateRangeChange);
@@ -63,9 +67,16 @@
     function renderChart() {
         const container = document.getElementById('usa-map-chart');
         if (chartData && usTopology && container) {
-            const svg = createUSAMapChart(chartData, diseaseName, usTopology);
+            const svg = createUSAMapChart(chartData, diseaseName, usTopology, {
+                highlightedStates: currentSelectedStates
+            });
             container.replaceChildren(svg);
         }
+    }
+
+    function onStateSelectionChange(selectedStates) {
+        currentSelectedStates = selectedStates;
+        renderChart();
     }
 
     async function onDateRangeChange(dateRange) {

@@ -29,13 +29,26 @@
     // Initialize context
     const context = loader(embeddedData, '{{ disease_slug }}');
 
-    // Render function
-    function updateUI(selectedStates) {
-        const svg = render(context, selectedStates);
+    // Current filter state
+    let currentSelectedStates = new Set();
+    let currentDateRange = { startDate: null, endDate: null };
+
+    // Render function - applies both state and date filters
+    function updateUI() {
+        const svg = render(context, currentSelectedStates, currentDateRange);
         document.getElementById('state-trend-chart').replaceChildren(svg);
     }
 
-    // Subscribe to MosaicState for selection changes
-    window.MosaicState.subscribeToStateSelection(updateUI);
+    // Subscribe to state selection changes
+    window.MosaicState.subscribeToStateSelection((selectedStates) => {
+        currentSelectedStates = selectedStates;
+        updateUI();
+    });
+
+    // Subscribe to date range changes
+    window.MosaicState.subscribeToDateRange((dateRange) => {
+        currentDateRange = dateRange;
+        updateUI();
+    });
 })();
 </script>

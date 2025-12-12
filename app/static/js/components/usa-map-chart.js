@@ -37,13 +37,14 @@ function loadUSTopology() {
  * @param {Object} data - Data object with states, max_cases, min_cases, available_states
  * @param {string} diseaseName - Name of the disease
  * @param {Object} usTopology - Pre-loaded US TopoJSON data
- * @param {Object} options - Optional configuration {width, height}
+ * @param {Object} options - Optional configuration {width, height, highlightedStates}
  * @returns {SVGElement} The SVG element node
  */
 function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
     // TopoJSON viewport is 975x610 for Albers USA projection
     const width = options.width || 975;
     const height = options.height || 610;
+    const highlightedStates = options.highlightedStates || new Set();
     const legendWidth = 200;
     const legendHeight = 16;
     const legendMargin = { right: 20, bottom: 50 };
@@ -111,6 +112,14 @@ function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
     const states = topojson.feature(usTopology, usTopology.objects.states);
     const stateMesh = topojson.mesh(usTopology, usTopology.objects.states, (a, b) => a !== b);
 
+    // Helper to check if a state is highlighted
+    const isHighlighted = (fipsId) => {
+        if (highlightedStates.size === 0) return false;
+        const fips = String(fipsId).padStart(2, '0');
+        const stateCode = FIPS_TO_STATE[fips];
+        return stateCode && highlightedStates.has(stateCode);
+    };
+
     // Draw states
     svg.append("g")
         .selectAll("path")
@@ -118,8 +127,8 @@ function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
         .join("path")
         .attr("fill", d => getColor(d.id))
         .attr("d", path)
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 0.5)
+        .attr("stroke", d => isHighlighted(d.id) ? "#1d4ed8" : "#fff")
+        .attr("stroke-width", d => isHighlighted(d.id) ? 2.5 : 0.5)
         .style("cursor", "pointer")
         .on("mouseover", function(event, d) {
             const fips = String(d.id).padStart(2, '0');
