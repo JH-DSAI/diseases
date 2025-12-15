@@ -151,7 +151,7 @@ When ready to deploy, use the commit SHA from the GitHub Actions run output:
 
 ```bash
 source .env
-COMMIT_SHA=$(git rev-parse HEAD)
+COMMIT_SHA=$(git rev-parse --short HEAD)
 az containerapp update \
   --name $AZURE_CONTAINER_APP_NAME \
   --resource-group $AZURE_RESOURCE_GROUP \
