@@ -38,7 +38,9 @@ RUN uv pip install --no-cache -e .
 
 # Copy application code
 COPY app ./app
-COPY us_disease_tracker_data ./us_disease_tracker_data
+
+# Data directories - created empty, should be initialized from S3 at runtime
+RUN mkdir -p us_disease_tracker_data nndss_data
 
 # Copy built frontend assets from stage 1
 COPY --from=frontend-builder /build/app/static/dist ./app/static/dist
