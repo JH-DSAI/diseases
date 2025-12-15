@@ -10,10 +10,12 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+import fsspec
 import pandas as pd
 
 from app.etl.normalizers.disease_names import apply_disease_aliases
 from app.etl.schema import REQUIRED_COLUMNS, validate_dataframe
+from app.etl.storage import get_filesystem, get_storage_options, is_remote_uri
 from app.utils import to_disease_slug
 
 logger = logging.getLogger(__name__)
@@ -26,19 +28,60 @@ class DataSourceTransformer(ABC):
     Implements the Template Method pattern where load() orchestrates
     the ETL pipeline and transform() is overridden by concrete classes.
 
+    Supports both local filesystem and remote storage (Azure Blob, S3)
+    via fsspec.
+
     Subclasses must implement:
         - transform(): Source-specific transformation logic
         - get_source_name(): Return the data source identifier
     """
 
-    def __init__(self, source_path: Path):
+    def __init__(self, source_uri: str | Path):
         """
         Initialize the transformer.
 
         Args:
-            source_path: Path to the data source (file or directory)
+            source_uri: URI to the data source. Can be:
+                - Local path (e.g., "/path/to/data" or "data/") or Path object
+                - Azure Blob URI (e.g., "az://container/path")
+                - S3 URI (e.g., "s3://bucket/path")
         """
-        self.source_path = source_path
+        # Convert Path objects to string for consistent handling
+        self.source_uri = str(source_uri) if source_uri else ""
+        self._fs: fsspec.AbstractFileSystem | None = None
+        self._base_path: str | None = None
+
+    @property
+    def fs(self) -> fsspec.AbstractFileSystem:
+        """Get the filesystem instance (lazily initialized)."""
+        if self._fs is None:
+            self._fs, self._base_path = get_filesystem(self.source_uri)
+        return self._fs
+
+    @property
+    def base_path(self) -> str:
+        """Get the base path within the filesystem."""
+        if self._base_path is None:
+            self._fs, self._base_path = get_filesystem(self.source_uri)
+        return self._base_path
+
+    @property
+    def storage_options(self) -> dict:
+        """Get storage options for pandas read operations."""
+        if is_remote_uri(self.source_uri):
+            return get_storage_options()
+        return {}
+
+    # Legacy property for backward compatibility
+    @property
+    def source_path(self) -> Path:
+        """Legacy property for backward compatibility with local paths."""
+        if is_remote_uri(self.source_uri):
+            raise ValueError(
+                f"source_path not available for remote URI: {self.source_uri}. "
+                "Use fs and base_path instead."
+            )
+        return Path(self.source_uri) if self.source_uri else Path(".")
 
     def load(self) -> pd.DataFrame:
         """
@@ -54,7 +97,7 @@ class DataSourceTransformer(ABC):
         Returns:
             DataFrame conforming to the unified schema
         """
-        logger.info(f"Loading data from {self.get_source_name()}: {self.source_path}")
+        logger.info(f"Loading data from {self.get_source_name()}: {self.source_uri}")
 
         # Step 1: Source-specific loading and transformation
         df = self.transform()

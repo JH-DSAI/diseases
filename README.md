@@ -71,16 +71,32 @@ disease-dashboard/
 - [tracker data](https://github.com/JH-DSAI/us_disease_tracker_data) JHU data, updated periodically.
 - [NNDSS data](https://data.cdc.gov/NNDSS/NNDSS-Weekly-Data/x9gk-5huc/about_data) CDC data, updated weekly. Click "export" to download as a CSV.
 
-### About the data prerequisites 
-During development, no automatic raw data download exists, so you'll have to download it yourself. To do this:
+### About the data prerequisites
+
+The app supports two modes for data loading:
+
+#### Local Development (default)
+Data is loaded from local directories. No Azure configuration needed.
 
 - The tracker data is in a private repo, ask JHU team for access, it should be cloned into the root dir of this repo.
   - `git clone git@github.com:JH-DSAI/us_disease_tracker_data.git` should be fine.
-  - e.g: `./us_diesease_tracker_data/data/states/ID/20251121-123820_ID_Michael-Schnaubelt.csv`
+  - e.g: `./us_disease_tracker_data/data/states/ID/20251121-123820_ID_Michael-Schnaubelt.csv`
 
 - The NNDSS data should be exported as a CSV and put in a dir called `/nndss_data` also in the root dir of this repo.
 See the project structure above.
   - e.g. `./nndss_data/NNDSS_Weekly_Data_20251121.csv`
+
+#### Remote Deployment (Azure Blob Storage)
+For deployed environments, data can be loaded from Azure Blob Storage. Set these in your `.env`:
+
+```bash
+AZURE_STORAGE_ACCOUNT="your-storage-account"
+AZURE_STORAGE_KEY="your-storage-key"
+DATA_URI="az://your-container/us_disease_tracker_data"
+NNDSS_DATA_URI="az://your-container/nndss_data"
+```
+
+When `DATA_URI` or `NNDSS_DATA_URI` are set, the app uses Azure Blob Storage instead of local files. This uses [fsspec](https://filesystem-spec.readthedocs.io/) + [adlfs](https://github.com/fsspec/adlfs) for service-agnostic cloud storage access.
 
 
 ### Installation
