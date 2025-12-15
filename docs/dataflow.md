@@ -262,7 +262,7 @@ For interactive cross-filtering, components use the Mosaic coordinator and share
 The `mosaic-state.js` module provides lazy-initialized shared state:
 
 ```javascript
-// app/static/js/lib/mosaic-state.js
+// app/static/js/framework/mosaic-state.js
 let coordinator = null;
 let stateSelection = null;
 
