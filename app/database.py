@@ -84,28 +84,33 @@ class DiseaseDatabase:
         """
         Load data from a specific source using its transformer.
 
+        Supports both local filesystem paths and remote URIs (Azure Blob, S3).
+
         Args:
             source_name: Name of the data source to load
         """
         conn = self.connect()
 
-        # Get source path based on source name
+        # Get source URI based on source name
+        # Priority: data_uri env var > local data_directory path
         if source_name == "tracker":
-            source_path = settings.data_directory
+            if settings.data_uri:
+                source_uri = settings.data_uri
+            else:
+                source_uri = str(settings.data_directory)
         elif source_name == "nndss":
-            source_path = settings.nndss_data_directory
+            if settings.nndss_data_uri:
+                source_uri = settings.nndss_data_uri
+            else:
+                source_uri = str(settings.nndss_data_directory)
         else:
-            logger.warning(f"Unknown source path for: {source_name}")
-            return
-
-        if not source_path.exists():
-            logger.warning(f"Source path not found for {source_name}: {source_path}")
+            logger.warning(f"Unknown source for: {source_name}")
             return
 
         try:
             # Get transformer and load data
             transformer_cls = get_transformer(source_name)
-            transformer = transformer_cls(source_path)
+            transformer = transformer_cls(source_uri)
             df = transformer.load()
 
             if df.empty:

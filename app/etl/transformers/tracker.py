@@ -3,16 +3,18 @@ State disease tracker data transformer.
 
 This module handles loading and transforming state-submitted disease
 tracker CSV data into the unified disease_data schema.
+
+Supports both local filesystem and remote storage (Azure Blob, S3) via fsspec.
 """
 
 import logging
 from collections import defaultdict
-from pathlib import Path
 
 import pandas as pd
 
 from app.etl.base import DataSourceTransformer
 from app.etl.normalizers.disease_names import normalize_tracker_disease_name
+from app.etl.storage import is_remote_uri
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +40,20 @@ class TrackerTransformer(DataSourceTransformer):
         Loads the latest CSV file per state from the source directory
         and combines them into a single DataFrame.
 
+        Supports both local filesystem and remote storage via fsspec.
+
         Returns:
             DataFrame with tracker data in unified schema format
         """
-        data_dir = self.source_path / "data" / "states"
+        data_path = f"{self.base_path}/data/states"
 
-        if not data_dir.exists():
-            logger.warning(f"Tracker data directory not found: {data_dir}")
+        # Check if directory exists
+        if not self.fs.exists(data_path):
+            logger.warning(f"Tracker data directory not found: {data_path}")
             return pd.DataFrame()
 
-        # Find all CSV files
-        all_csv_files = list(data_dir.rglob("*.csv"))
+        # Find all CSV files using fsspec glob
+        all_csv_files = self.fs.glob(f"{data_path}/**/*.csv")
         logger.info(f"Found {len(all_csv_files)} total tracker CSV files")
 
         if not all_csv_files:
@@ -63,8 +68,23 @@ class TrackerTransformer(DataSourceTransformer):
         all_data = []
         for csv_file in csv_files:
             try:
-                df = pd.read_csv(csv_file, parse_dates=["report_period_start", "report_period_end"])
-                logger.info(f"Loaded {csv_file.name}: {len(df)} rows")
+                # Build the full URI for pandas to read
+                if is_remote_uri(self.source_uri):
+                    # For remote, use the protocol prefix
+                    file_uri = f"az://{csv_file}"
+                    df = pd.read_csv(
+                        file_uri,
+                        parse_dates=["report_period_start", "report_period_end"],
+                        storage_options=self.storage_options,
+                    )
+                else:
+                    # For local, use path directly
+                    df = pd.read_csv(
+                        csv_file,
+                        parse_dates=["report_period_start", "report_period_end"],
+                    )
+                file_name = csv_file.split("/")[-1]
+                logger.info(f"Loaded {file_name}: {len(df)} rows")
                 all_data.append(df)
             except Exception as e:
                 logger.error(f"Error loading {csv_file}: {e}")
@@ -84,25 +104,34 @@ class TrackerTransformer(DataSourceTransformer):
         logger.info(f"Transformed {len(combined_df)} total tracker records")
         return combined_df
 
-    def _select_latest_per_state(self, csv_files: list[Path]) -> list[Path]:
+    def _select_latest_per_state(self, csv_files: list[str]) -> list[str]:
         """
         Select the latest CSV file for each state.
 
         File format: YYYYMMDD-HHMMSS_STATE_UPLOADERNAME.csv
+
+        Args:
+            csv_files: List of file paths (strings from fsspec glob)
+
+        Returns:
+            List of latest file paths per state
         """
         files_by_state = defaultdict(list)
 
         for csv_file in csv_files:
-            # Extract state from parent directory name
-            state = csv_file.parent.name
-            files_by_state[state].append(csv_file)
+            # Extract state from parent directory name (second to last path component)
+            parts = csv_file.replace("\\", "/").split("/")
+            if len(parts) >= 2:
+                state = parts[-2]  # Parent directory is the state
+                files_by_state[state].append(csv_file)
 
         # Select the latest file for each state (sorted by filename timestamp)
         latest_files = []
         for state, state_files in files_by_state.items():
-            latest_file = sorted(state_files, key=lambda f: f.name, reverse=True)[0]
+            # Sort by filename (last path component)
+            latest_file = sorted(state_files, key=lambda f: f.split("/")[-1], reverse=True)[0]
             latest_files.append(latest_file)
-            logger.debug(f"Selected latest file for {state}: {latest_file.name}")
+            logger.debug(f"Selected latest file for {state}: {latest_file.split('/')[-1]}")
 
         return latest_files
 

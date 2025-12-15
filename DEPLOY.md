@@ -22,7 +22,18 @@ GitHub Actions
 az containerapp update --image ghcr.io/OWNER/disease-dashboard:SHA
     ↓
 Azure Container Apps pulls new image from GHCR
+    ↓
+On startup, app loads CSV data from Azure Blob Storage (via fsspec/adlfs)
+    ↓
+ETL transforms CSV → DuckDB in-memory database
 ```
+
+### Data Flow
+
+- **Local development**: CSV files in local directories (`us_disease_tracker_data/`, `nndss_data/`)
+- **Deployed environments**: CSV files in Azure Blob Storage, loaded via `DATA_URI` and `NNDSS_DATA_URI` env vars
+
+The app uses [fsspec](https://filesystem-spec.readthedocs.io/) + [adlfs](https://github.com/fsspec/adlfs) for service-agnostic storage access. This means the same code works with local files, Azure Blob, or S3.
 
 ## Configuration
 
@@ -74,6 +85,34 @@ az containerapp env create \
 
 After you've pushed your first image to GHCR (happens automatically on push to main):
 
+#### For Staging (password protected)
+
+```bash
+source .env
+
+# Generate staging password (save this somewhere secure!)
+STAGING_PASSWORD=$(openssl rand -base64 16 | tr -d '=/+' | head -c 20)
+echo "Staging password: $STAGING_PASSWORD"
+
+az containerapp create \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --environment $AZURE_ENVIRONMENT_NAME \
+  --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:latest \
+  --target-port 8000 \
+  --ingress external \
+  --cpu 2.0 \
+  --memory 4.0Gi \
+  --min-replicas 1 \
+  --max-replicas 3 \
+  --env-vars \
+    STAGING_AUTH_ENABLED=true \
+    STAGING_AUTH_USERNAME=admin \
+    STAGING_AUTH_PASSWORD="$STAGING_PASSWORD"
+```
+
+#### For Production (public access)
+
 ```bash
 source .env
 az containerapp create \
@@ -83,8 +122,8 @@ az containerapp create \
   --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:latest \
   --target-port 8000 \
   --ingress external \
-  --cpu 0.5 \
-  --memory 1.0Gi \
+  --cpu 2.0 \
+  --memory 4.0Gi \
   --min-replicas 1 \
   --max-replicas 3
 ```
@@ -128,30 +167,19 @@ az containerapp update \
   --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:latest
 ```
 
-## Configure Staging Authentication
+## Update Staging Password
 
-To protect your staging environment with HTTP Basic Auth:
+To change the staging password on an existing deployment:
 
 ```bash
 source .env
+NEW_PASSWORD=$(openssl rand -base64 16 | tr -d '=/+' | head -c 20)
+echo "New password: $NEW_PASSWORD"
+
 az containerapp update \
   --name $AZURE_CONTAINER_APP_NAME \
   --resource-group $AZURE_RESOURCE_GROUP \
-  --set-env-vars \
-    STAGING_AUTH_ENABLED=true \
-    STAGING_AUTH_USERNAME=admin
-
-# Set password as a secret
-az containerapp secret set \
-  --name $AZURE_CONTAINER_APP_NAME \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --secrets staging-auth-password=<your-secure-password>
-
-# Reference the secret in environment variable
-az containerapp update \
-  --name $AZURE_CONTAINER_APP_NAME \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --set-env-vars STAGING_AUTH_PASSWORD=secretref:staging-auth-password
+  --set-env-vars STAGING_AUTH_PASSWORD="$NEW_PASSWORD"
 ```
 
 ## Environment Variables Reference
@@ -162,6 +190,10 @@ az containerapp update \
 | `STAGING_AUTH_USERNAME` | Auth username | `admin` |
 | `STAGING_AUTH_PASSWORD` | Auth password | (required if enabled) |
 | `DEBUG` | Enable debug mode | `false` |
+| `AZURE_STORAGE_ACCOUNT` | Azure Blob Storage account name | (empty) |
+| `AZURE_STORAGE_KEY` | Azure Blob Storage account key | (empty) |
+| `DATA_URI` | Tracker data location (e.g., `az://data/us_disease_tracker_data`) | (empty = local) |
+| `NNDSS_DATA_URI` | NNDSS data location (e.g., `az://data/nndss_data`) | (empty = local) |
 
 ## Useful Commands
 
@@ -194,16 +226,116 @@ az containerapp update \
   --max-replicas 5
 ```
 
-## TODO: Initialize Database from S3
+## Azure Blob Storage Setup (Data)
 
-The container starts with empty data directories. The recommended approach:
+The container loads CSV data from Azure Blob Storage at startup. You need to provision storage and upload data.
 
-1. Build the DuckDB database locally or in a data pipeline
-2. Upload the `.duckdb` file to S3/Azure Blob Storage
-3. Configure the container to download the database at startup
-4. Set up regular syncs or streaming updates to keep the database current
+### 1. Create Storage Account
 
-This keeps the container image small and allows data updates without rebuilding.
+```bash
+source .env
+
+# Create storage account (name must be globally unique, lowercase, no hyphens)
+STORAGE_ACCOUNT_NAME="diseasedashboarddata"  # Change this to something unique
+
+az storage account create \
+  --name $STORAGE_ACCOUNT_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --location $AZURE_LOCATION \
+  --sku Standard_LRS
+
+# Get the storage account key
+STORAGE_KEY=$(az storage account keys list \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --query '[0].value' -o tsv)
+
+echo "Storage Account: $STORAGE_ACCOUNT_NAME"
+echo "Storage Key: $STORAGE_KEY"
+```
+
+### 2. Create Container and Upload Data
+
+```bash
+# Create a container for the data
+az storage container create \
+  --name data \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --account-key $STORAGE_KEY
+
+# Upload tracker data
+az storage blob upload-batch \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --account-key $STORAGE_KEY \
+  --destination data/us_disease_tracker_data \
+  --source us_disease_tracker_data/
+
+# Upload NNDSS data
+az storage blob upload-batch \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --account-key $STORAGE_KEY \
+  --destination data/nndss_data \
+  --source nndss_data/
+```
+
+### 3. Configure Container App
+
+Add the storage credentials and data URIs to the Container App:
+
+```bash
+source .env
+
+az containerapp update \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --set-env-vars \
+    AZURE_STORAGE_ACCOUNT="$STORAGE_ACCOUNT_NAME" \
+    AZURE_STORAGE_KEY="$STORAGE_KEY" \
+    DATA_URI="az://data/us_disease_tracker_data" \
+    NNDSS_DATA_URI="az://data/nndss_data"
+```
+
+### 4. Verify Data Loading
+
+After updating, check the container logs to verify data is loading:
+
+```bash
+az containerapp logs show \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --follow
+```
+
+You should see log messages like:
+```
+Loading data from tracker: az://data/us_disease_tracker_data
+Found X total tracker CSV files
+Loading data from nndss: az://data/nndss_data
+Database initialized with X total records
+```
+
+### Updating Data
+
+To update data after initial setup:
+
+```bash
+# Re-upload tracker data
+az storage blob upload-batch \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --account-key $STORAGE_KEY \
+  --destination data/us_disease_tracker_data \
+  --source us_disease_tracker_data/ \
+  --overwrite
+
+# Restart the container to reload data
+az containerapp revision restart \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --revision $(az containerapp revision list \
+    --name $AZURE_CONTAINER_APP_NAME \
+    --resource-group $AZURE_RESOURCE_GROUP \
+    --query '[0].name' -o tsv)
+```
 
 ## Troubleshooting
 
@@ -226,3 +358,32 @@ The `/health` endpoint is excluded from authentication and should always return 
 1. Verify environment variables are set correctly
 2. Check that `STAGING_AUTH_ENABLED` is `true` (string, not boolean)
 3. Ensure password secret is properly referenced
+
+### Data not loading from Azure Blob Storage
+
+1. Verify storage credentials are set:
+   ```bash
+   az containerapp show \
+     --name $AZURE_CONTAINER_APP_NAME \
+     --resource-group $AZURE_RESOURCE_GROUP \
+     --query 'properties.template.containers[0].env' -o table
+   ```
+
+2. Check that `DATA_URI` uses correct format: `az://container/path` (not `https://`)
+
+3. Verify data exists in blob storage:
+   ```bash
+   az storage blob list \
+     --account-name $STORAGE_ACCOUNT_NAME \
+     --container-name data \
+     --prefix us_disease_tracker_data/ \
+     --output table
+   ```
+
+4. Test storage access locally:
+   ```bash
+   export AZURE_STORAGE_ACCOUNT="your-account"
+   export AZURE_STORAGE_KEY="your-key"
+   export DATA_URI="az://data/us_disease_tracker_data"
+   uv run python -c "from app.etl.storage import get_filesystem; fs, path = get_filesystem('$DATA_URI'); print(fs.ls(path))"
+   ```

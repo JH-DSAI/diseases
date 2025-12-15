@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     staging_auth_username: str = "admin"
     staging_auth_password: str = ""
 
+    # Azure Blob Storage (for remote data)
+    azure_storage_account: str = ""
+    azure_storage_key: str = ""
+
+    # Data source URIs (az://container/path for Azure, empty for local filesystem)
+    data_uri: str = ""
+    nndss_data_uri: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

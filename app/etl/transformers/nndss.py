@@ -3,17 +3,19 @@ NNDSS (National Notifiable Diseases Surveillance System) data transformer.
 
 This module handles loading and transforming CDC NNDSS weekly data
 into the unified disease_data schema.
+
+Supports both local filesystem and remote storage (Azure Blob, S3) via fsspec.
 """
 
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pandas as pd
 
 from app.etl.base import DataSourceTransformer
 from app.etl.normalizers.disease_names import normalize_nndss_disease_name
 from app.etl.normalizers.geo import STATE_CODES, classify_geo_unit
+from app.etl.storage import is_remote_uri
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +86,12 @@ class NNDSSTransformer(DataSourceTransformer):
     - Case count cleaning (handling "-", "N", etc.)
     - State name to code mapping
     - Disease name normalization
+
+    Supports both local filesystem and remote storage via fsspec.
     """
 
-    def __init__(self, source_path: Path):
-        super().__init__(source_path)
+    def __init__(self, source_uri: str):
+        super().__init__(source_uri)
         self.mmwr_converter = MMWRWeekConverter()
 
     def get_source_name(self) -> str:
@@ -97,33 +101,54 @@ class NNDSSTransformer(DataSourceTransformer):
         """
         Load and transform NNDSS data to unified schema.
 
+        Supports both local filesystem and remote storage via fsspec.
+
         Returns:
             DataFrame with NNDSS data in unified schema format
         """
         # Find the latest NNDSS CSV file
         csv_file = self._find_latest_file()
         if csv_file is None:
-            logger.warning(f"No NNDSS CSV files found in {self.source_path}")
+            logger.warning(f"No NNDSS CSV files found in {self.source_uri}")
             return pd.DataFrame()
 
         logger.info(f"Loading NNDSS data from {csv_file}")
 
-        # Load CSV with proper handling of empty values
-        df = pd.read_csv(
-            csv_file,
-            dtype={
-                "Reporting Area": str,
-                "Current MMWR Year": "Int64",
-                "MMWR WEEK": "Int64",
-                "Label": str,
-                "Current week": str,
-                "LOCATION1": str,
-                "LOCATION2": str,
-            },
-            na_values=["", " "],
-            keep_default_na=True,
-            low_memory=False,
-        )
+        # Build the full URI for pandas to read
+        if is_remote_uri(self.source_uri):
+            file_uri = f"az://{csv_file}"
+            df = pd.read_csv(
+                file_uri,
+                dtype={
+                    "Reporting Area": str,
+                    "Current MMWR Year": "Int64",
+                    "MMWR WEEK": "Int64",
+                    "Label": str,
+                    "Current week": str,
+                    "LOCATION1": str,
+                    "LOCATION2": str,
+                },
+                na_values=["", " "],
+                keep_default_na=True,
+                low_memory=False,
+                storage_options=self.storage_options,
+            )
+        else:
+            df = pd.read_csv(
+                csv_file,
+                dtype={
+                    "Reporting Area": str,
+                    "Current MMWR Year": "Int64",
+                    "MMWR WEEK": "Int64",
+                    "Label": str,
+                    "Current week": str,
+                    "LOCATION1": str,
+                    "LOCATION2": str,
+                },
+                na_values=["", " "],
+                keep_default_na=True,
+                low_memory=False,
+            )
 
         logger.info(f"Loaded {len(df)} raw NNDSS records")
 
@@ -148,16 +173,17 @@ class NNDSSTransformer(DataSourceTransformer):
         logger.info(f"Transformed to {len(df)} records")
         return df
 
-    def _find_latest_file(self) -> Path | None:
+    def _find_latest_file(self) -> str | None:
         """Find the most recent NNDSS CSV file in the source directory."""
-        if not self.source_path.exists():
+        if not self.fs.exists(self.base_path):
             return None
 
-        nndss_files = list(self.source_path.glob("NNDSS_Weekly_Data_*.csv"))
+        # Use fsspec glob to find files
+        nndss_files = self.fs.glob(f"{self.base_path}/NNDSS_Weekly_Data_*.csv")
         if not nndss_files:
             return None
 
-        # Return the most recent file (sorted by name)
+        # Return the most recent file (sorted by name, most recent first)
         return sorted(nndss_files, reverse=True)[0]
 
     def _classify_geo_unit(self, df: pd.DataFrame) -> pd.DataFrame:
