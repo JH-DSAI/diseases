@@ -1,32 +1,46 @@
-name: Deploy to Azure Container Apps
+name: Build and Push to GHCR
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual triggers
-
-env:
-  AZURE_CONTAINER_REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
-  CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
-  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Deploy to Container Apps
-        uses: azure/container-apps-deploy-action@v2
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          appSourcePath: ${{ github.workspace }}
-          acrName: ${{ env.AZURE_CONTAINER_REGISTRY }}
-          containerAppName: ${{ env.CONTAINER_APP_NAME }}
-          resourceGroup: ${{ env.RESOURCE_GROUP }}
-          imageToBuild: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ github.sha }}
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Print deploy command
+        run: |
+          echo "✅ Image pushed to GHCR"
+          echo ""
+          echo "To deploy, run:"
+          echo "az containerapp update --name disease-dashboard --resource-group USDT_web_app_2 --image ghcr.io/${{ github.repository }}:${{ github.sha }}"

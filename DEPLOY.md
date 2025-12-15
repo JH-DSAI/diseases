@@ -1,195 +1,158 @@
 # Deploying Disease Dashboard to Azure Container Apps
 
-This guide covers deploying the Disease Dashboard to Azure Container Apps.
+This guide covers deploying the Disease Dashboard to Azure Container Apps using GitHub Container Registry (GHCR).
 
 ## Prerequisites
 
 - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) installed
-- An Azure subscription
-- GitHub repository with this code
+- An Azure subscription with Contributor access
+- GitHub repository (public)
+- `.env` file configured (copy from `.env.example`)
 
-## Deployment Options
+## Architecture
 
-There are two ways to deploy:
+```
+GitHub (push to main)
+    ↓
+GitHub Actions
+    └── Build Docker image → Push to GHCR (automatic)
 
-1. **Azure Portal UI** (Quick start) - Use "Source code or artifact" to deploy directly from GitHub
-2. **CLI + GitHub Actions** (Automated CI/CD) - Set up ACR and automated deployments
+[Manual step when ready to deploy]
+    ↓
+az containerapp update --image ghcr.io/OWNER/disease-dashboard:SHA
+    ↓
+Azure Container Apps pulls new image from GHCR
+```
 
----
+## Configuration
 
-## Option A: Deploy via Azure Portal (Quickest)
+All deployment commands read from `.env`. Copy the example and fill in your values:
 
-1. Go to [Azure Portal](https://portal.azure.com) > Create a resource > Container App
-2. Configure basics:
-   - **Resource group**: Create new or use existing
-   - **Container app name**: `disease-dashboard` (lowercase, hyphens allowed)
-   - **Region**: Choose your preferred region
-3. On deployment source, select **"Source code or artifact"**
-4. Connect to your GitHub repository
-5. Azure will auto-detect the Dockerfile and build/deploy for you
-6. Configure ingress to allow external traffic on port 8000
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
 
-This approach is simpler but doesn't include automated CI/CD on push.
+Required variables for deployment:
+- `AZURE_RESOURCE_GROUP` - Azure resource group name
+- `AZURE_LOCATION` - Azure region (e.g., eastus)
+- `AZURE_CONTAINER_APP_NAME` - Name for your Container App
+- `AZURE_ENVIRONMENT_NAME` - Container Apps environment name
+- `GITHUB_OWNER` - Your GitHub username or organization
+- `GITHUB_REPO` - Repository name
 
----
+## Initial Setup
 
-## Option B: CLI Setup with GitHub Actions (Recommended for CI/CD)
-
-### Login to Azure
+### 1. Login to Azure
 
 ```bash
 az login
 ```
 
-### Set Variables
+### 2. Load environment variables
 
 ```bash
-# Customize these values
-RESOURCE_GROUP="USDT_web_app"
-LOCATION="westus2"
-ACR_NAME="diseasedashboardacr"  # Must be globally unique, lowercase, no hyphens
-CONTAINER_APP_NAME="disease-dashboard"
-ENVIRONMENT_NAME="disease-dashboard-env"
+source .env
 ```
 
-### Create Resource Group (skip if using existing)
+### 3. Create Resource Group (skip if using existing)
 
 ```bash
-az group create --name $RESOURCE_GROUP --location $LOCATION
+az group create --name $AZURE_RESOURCE_GROUP --location $AZURE_LOCATION
 ```
 
-### Create Azure Container Registry
-
-```bash
-az acr create \
-  --resource-group $RESOURCE_GROUP \
-  --name $ACR_NAME \
-  --sku Basic \
-  --admin-enabled true
-```
-
-### Create Container Apps Environment
+### 4. Create Container Apps Environment
 
 ```bash
 az containerapp env create \
-  --name $ENVIRONMENT_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --location $LOCATION
+  --name $AZURE_ENVIRONMENT_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --location $AZURE_LOCATION
 ```
 
-### Create Service Principal for GitHub Actions
+### 5. Create Container App
+
+After you've pushed your first image to GHCR (happens automatically on push to main):
 
 ```bash
-# Create service principal with Contributor role
-az ad sp create-for-rbac \
-  --name "github-actions-disease-dashboard" \
-  --role Contributor \
-  --scopes /subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP \
-  --sdk-auth
-```
-
-Save the JSON output - you'll need it for the GitHub secret.
-
-### Grant ACR Push Access
-
-```bash
-# Get the service principal ID from the JSON output (the "clientId" field)
-SP_ID="<clientId from above>"
-
-# Grant AcrPush role
-az role assignment create \
-  --assignee $SP_ID \
-  --role AcrPush \
-  --scope $(az acr show --name $ACR_NAME --query id -o tsv)
-```
-
-### Configure GitHub Repository
-
-Go to your GitHub repository > Settings > Secrets and variables > Actions
-
-**Add this secret:**
-
-| Name | Value |
-|------|-------|
-| `AZURE_CREDENTIALS` | The entire JSON output from the service principal creation |
-
-**Add these variables** (Settings > Variables tab):
-
-| Name | Value |
-|------|-------|
-| `AZURE_CONTAINER_REGISTRY` | Your ACR name (e.g., `diseasedashboardacr`) |
-| `CONTAINER_APP_NAME` | `disease-dashboard` |
-| `RESOURCE_GROUP` | Your resource group name |
-
-### First-Time Deployment (Manual)
-
-For the initial deployment, create the Container App manually:
-
-```bash
-# Build and push image
-az acr build \
-  --registry $ACR_NAME \
-  --image $CONTAINER_APP_NAME:latest \
-  .
-
-# Create container app
+source .env
 az containerapp create \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --environment $ENVIRONMENT_NAME \
-  --image $ACR_NAME.azurecr.io/$CONTAINER_APP_NAME:latest \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --environment $AZURE_ENVIRONMENT_NAME \
+  --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:latest \
   --target-port 8000 \
   --ingress external \
-  --registry-server $ACR_NAME.azurecr.io \
   --cpu 0.5 \
   --memory 1.0Gi \
   --min-replicas 1 \
   --max-replicas 3
 ```
 
----
+### 6. Make GHCR Package Public
+
+Since the repo is public, make the package public too (no auth needed):
+
+1. Go to GitHub > Your profile > Packages
+2. Click on the `disease-dashboard` package
+3. Go to Package settings
+4. Change visibility to **Public**
+
+## Daily Workflow
+
+### Automatic: Build and Push
+
+Every push to `main` automatically:
+1. Builds the Docker image
+2. Pushes to GHCR with tags `latest` and the commit SHA
+
+### Manual: Deploy to Azure
+
+When ready to deploy, run the command printed at the end of the GitHub Actions run:
+
+```bash
+source .env
+az containerapp update \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:COMMIT_SHA
+```
+
+Or deploy the latest:
+
+```bash
+source .env
+az containerapp update \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:latest
+```
 
 ## Configure Staging Authentication
 
 To protect your staging environment with HTTP Basic Auth:
 
-### Set Environment Variables
-
 ```bash
+source .env
 az containerapp update \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --set-env-vars \
     STAGING_AUTH_ENABLED=true \
     STAGING_AUTH_USERNAME=admin
 
 # Set password as a secret
 az containerapp secret set \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --secrets staging-auth-password=<your-secure-password>
 
 # Reference the secret in environment variable
 az containerapp update \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --set-env-vars STAGING_AUTH_PASSWORD=secretref:staging-auth-password
 ```
-
-### Verify Authentication
-
-Visit your Container App URL. You should see a browser login dialog.
-
-## Automated Deployments (GitHub Actions)
-
-After initial setup, pushing to `main` triggers automatic deployment via GitHub Actions.
-
-The workflow:
-1. Checks out code
-2. Logs into Azure
-3. Builds Docker image
-4. Pushes to ACR
-5. Deploys new revision to Container Apps
 
 ## Environment Variables Reference
 
@@ -203,28 +166,30 @@ The workflow:
 ## Useful Commands
 
 ```bash
+source .env
+
 # View logs
 az containerapp logs show \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --follow
 
 # Get app URL
 az containerapp show \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --query properties.configuration.ingress.fqdn -o tsv
 
 # List revisions
 az containerapp revision list \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --output table
 
 # Scale replicas
 az containerapp update \
-  --name $CONTAINER_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP \
   --min-replicas 1 \
   --max-replicas 5
 ```
@@ -235,7 +200,10 @@ az containerapp update \
 
 Check logs:
 ```bash
-az containerapp logs show --name $CONTAINER_APP_NAME --resource-group $RESOURCE_GROUP
+source .env
+az containerapp logs show \
+  --name $AZURE_CONTAINER_APP_NAME \
+  --resource-group $AZURE_RESOURCE_GROUP
 ```
 
 ### Health check failing
