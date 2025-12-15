@@ -151,10 +151,11 @@ When ready to deploy, use the commit SHA from the GitHub Actions run output:
 
 ```bash
 source .env
+COMMIT_SHA=$(git rev-parse HEAD)
 az containerapp update \
   --name $AZURE_CONTAINER_APP_NAME \
   --resource-group $AZURE_RESOURCE_GROUP \
-  --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:COMMIT_SHA
+  --image ghcr.io/$GITHUB_OWNER/$GITHUB_REPO:$COMMIT_SHA
 ```
 
 **Important:** Always use the commit SHA tag, not `:latest`. Azure Container Apps won't pull a new image if the tag string hasn't changed, even if the underlying image was updated. Using commit SHAs ensures the correct version is deployed and enables easy rollbacks.
