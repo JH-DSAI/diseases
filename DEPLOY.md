@@ -194,6 +194,17 @@ az containerapp update \
   --max-replicas 5
 ```
 
+## TODO: Initialize Database from S3
+
+The container starts with empty data directories. The recommended approach:
+
+1. Build the DuckDB database locally or in a data pipeline
+2. Upload the `.duckdb` file to S3/Azure Blob Storage
+3. Configure the container to download the database at startup
+4. Set up regular syncs or streaming updates to keep the database current
+
+This keeps the container image small and allows data updates without rebuilding.
+
 ## Troubleshooting
 
 ### Container fails to start
