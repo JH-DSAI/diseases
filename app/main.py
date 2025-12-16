@@ -4,13 +4,30 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.database import db
 from app.middleware import BasicAuthMiddleware
 from app.routers import api, html_api, pages, sql_api
+
+
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    """Add Cache-Control headers to static assets for better performance."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        # Built assets (CSS/JS bundles) - cache for 1 year (immutable)
+        if path.startswith("/static/dist/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        # Other static files - cache for 1 day
+        elif path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+
 
 # Configure logging
 logging.basicConfig(
@@ -65,6 +82,9 @@ app = FastAPI(
     description="US Disease Tracker Dashboard - Data visualizations for disease surveillance",
     lifespan=lifespan,
 )
+
+# Add caching middleware for static assets
+app.add_middleware(CacheControlMiddleware)
 
 # Add staging authentication middleware (if enabled)
 if settings.staging_auth_enabled:

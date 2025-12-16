@@ -49,10 +49,12 @@ function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
     const legendHeight = 16;
     const legendMargin = { right: 20, bottom: 50 };
 
-    // Create detached SVG
+    // Create detached SVG with accessibility attributes
     const svg = d3.create("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
+        .attr("role", "img")
+        .attr("aria-label", `USA choropleth map showing ${diseaseName} cases by state`)
         .style("width", "100%")
         .style("height", "auto");
 

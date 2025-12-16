@@ -18,10 +18,12 @@ function createAgeGroupChart(data, diseaseName, selectedStates = [], options = {
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
-    // Create detached SVG
+    // Create detached SVG with accessibility attributes
     const svg = d3.create("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
+        .attr("role", "img")
+        .attr("aria-label", `Age group distribution chart for ${diseaseName} cases by state`)
         .style("width", "100%")
         .style("height", "auto");
 

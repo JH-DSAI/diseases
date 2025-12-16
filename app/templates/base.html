@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ page_title | default('Disease Dashboard') }}{% endblock %}</title>
 
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{{ meta_description | default('Track US disease surveillance data with interactive charts, maps, and trend analysis.') }}">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{{ canonical_url | default(request.url) }}">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="{{ page_title | default('Disease Dashboard') }}">
+    <meta property="og:description" content="{{ meta_description | default('Track US disease surveillance data with interactive charts, maps, and trend analysis.') }}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ canonical_url | default(request.url) }}">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ page_title | default('Disease Dashboard') }}">
+    <meta name="twitter:description" content="{{ meta_description | default('Track US disease surveillance data with interactive charts, maps, and trend analysis.') }}">
+
+    <!-- Preload Critical Resources -->
+    <link rel="preload" href="/static/dist/main.css" as="style">
+    <link rel="preload" href="/static/dist/vendor.js" as="script">
+
     <!-- Tailwind CSS v4 + Typography + DaisyUI (Built) -->
     <link rel="stylesheet" href="/static/dist/main.css">
 
