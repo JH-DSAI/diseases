@@ -1,8 +1,21 @@
 """Application configuration"""
 
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def get_env_files() -> tuple[str, ...]:
+    """Determine which env files to load based on APP_ENV.
+
+    Loading order (later files override earlier):
+    1. .env.{APP_ENV} - environment-specific settings
+    2. .env - local overrides (gitignored, for secrets/customization)
+    """
+    app_env = os.getenv("APP_ENV", "development")
+    env_file = f".env.{app_env}"
+    return (env_file, ".env")
 
 
 class Settings(BaseSettings):
@@ -35,7 +48,11 @@ class Settings(BaseSettings):
     data_uri: str = ""
     nndss_data_uri: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=get_env_files(),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 # Global settings instance

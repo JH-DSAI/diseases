@@ -18,10 +18,12 @@ function createSerotypeChart(data, diseaseName, selectedStates = [], options = {
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
-    // Create detached SVG
+    // Create detached SVG with accessibility attributes
     const svg = d3.create("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
+        .attr("role", "img")
+        .attr("aria-label", `Serotype distribution chart for ${diseaseName} cases by state`)
         .style("width", "100%")
         .style("height", "auto");
 
@@ -81,15 +83,19 @@ function createSerotypeChart(data, diseaseName, selectedStates = [], options = {
         .domain([0, 100])
         .range([innerHeight, 0]);
 
-    // Color scale for serotypes - using distinct colors for meningococcal serogroups
+    // ColorBrewer Dark2 palette - colorblind-friendly qualitative colors
+    // https://colorbrewer2.org/
     const serotypeColors = {
-        'A': '#ef4444',    // red
-        'B': '#3b82f6',    // blue
-        'C': '#10b981',    // green
-        'W': '#f59e0b',    // amber
-        'X': '#8b5cf6',    // purple
-        'Y': '#ec4899',    // pink
-        'OTHER': '#6b7280' // gray
+        'A': '#1B9E77',       // dark teal
+        'B': '#D95F02',       // dark orange
+        'C': '#7570B3',       // dark lilac
+        'W': '#E7298A',       // dark magenta
+        'X': '#66A61E',       // dark lime
+        'Y': '#E6AB02',       // dark gold
+        'Z': '#A6761D',       // dark tan
+        'ACWY': '#7570B3',    // dark lilac (grouped serogroups)
+        'UNKNOWN': '#999999', // medium gray
+        'UNSPECIFIED': '#666666' // dark gray
     };
 
     const color = d3.scaleOrdinal()

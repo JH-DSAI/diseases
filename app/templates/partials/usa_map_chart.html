@@ -12,6 +12,7 @@
         <h3 class="card-title">Cases by State</h3>
 
         {% if chart_data.available_states %}
+        <div id="usa-map-legend" class="flex justify-end mb-2"></div>
         <div id="usa-map-chart" class="w-full" style="min-height: 500px;">
             <div class="flex items-center justify-center h-96">
                 <span class="loading loading-spinner loading-lg"></span>
@@ -66,11 +67,23 @@
 
     function renderChart() {
         const container = document.getElementById('usa-map-chart');
+        const legendContainer = document.getElementById('usa-map-legend');
         if (chartData && usTopology && container) {
-            const svg = createUSAMapChart(chartData, diseaseName, usTopology, {
+            const { svg, legendData } = createUSAMapChart(chartData, diseaseName, usTopology, {
                 highlightedStates: currentSelectedStates
             });
             container.replaceChildren(svg);
+
+            // Render legend separately
+            if (legendContainer && legendData) {
+                const legend = createMapLegend({
+                    title: 'Total Cases',
+                    colors: legendData.colors,
+                    breaks: legendData.breaks,
+                    noDataColor: legendData.noDataColor
+                });
+                legendContainer.replaceChildren(legend);
+            }
         }
     }
 

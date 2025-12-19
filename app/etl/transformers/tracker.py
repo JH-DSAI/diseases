@@ -13,10 +13,19 @@ from collections import defaultdict
 import pandas as pd
 
 from app.etl.base import DataSourceTransformer
-from app.etl.normalizers.disease_names import normalize_tracker_disease_name
+from app.etl.normalizers.slugify import slugify
 from app.etl.storage import is_remote_uri
 
 logger = logging.getLogger(__name__)
+
+# Normalize tracker subtype values to canonical form
+# See docs/data-decisions.md for rationale
+SUBTYPE_NORMALIZATION = {
+    "other": "unspecified",
+    "na": "unspecified",
+    "not specified": "unspecified",
+    "n/a": "unspecified",
+}
 
 
 class TrackerTransformer(DataSourceTransformer):
@@ -148,62 +157,91 @@ class TrackerTransformer(DataSourceTransformer):
         return df
 
     def _normalize_disease_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Normalize disease names to NNDSS standard."""
+        """Store original disease name for provenance."""
         df = df.copy()
-
-        # Store original disease name before mapping
         df["original_disease_name"] = df["disease_name"]
-
-        # Apply tracker -> NNDSS mapping
-        df["disease_name"] = df["disease_name"].apply(normalize_tracker_disease_name)
-
         return df
 
     def _map_to_unified_schema(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Map tracker fields to the unified disease_data schema."""
+        """Map tracker fields to the unified disease_data schema.
+
+        Tracker names are the canonical source for disease names.
+        All dimension columns get corresponding _slug columns for matching.
+        """
         unified = pd.DataFrame()
 
-        # Required fields
+        # Date/time fields
         unified["report_period_start"] = df["report_period_start"]
         unified["report_period_end"] = df["report_period_end"]
-        unified["disease_name"] = df["disease_name"]
-        unified["original_disease_name"] = df["original_disease_name"]
-        unified["state"] = df["state"]
-        unified["count"] = df["count"]
-
-        # Fields with defaults or from CSV if present
         unified["date_type"] = df.get("date_type", "cccd")
         unified["time_unit"] = df.get("time_unit", "month")
-        unified["disease_subtype"] = self._normalize_subtype(df.get("disease_subtype"))
-        unified["reporting_jurisdiction"] = df.get("reporting_jurisdiction", df["state"])
-        unified["geo_name"] = df.get("geo_name", df["state"])
-        unified["geo_unit"] = df.get("geo_unit", "state")
-        unified["age_group"] = self._clean_nullable_column(df.get("age_group"))
-        unified["confirmation_status"] = self._clean_nullable_column(df.get("confirmation_status"))
+
+        # Disease - tracker names are canonical
+        unified["disease_name"] = df["disease_name"]
+        unified["disease_slug"] = df["disease_name"].apply(slugify)
+        unified["original_disease_name"] = df["original_disease_name"]
+
+        # Disease subtype - normalize to canonical values
+        subtype_series = self._normalize_subtype(df.get("disease_subtype"))
+        unified["disease_subtype"] = subtype_series
+        unified["disease_subtype_slug"] = subtype_series.apply(slugify)
+
+        # State/Geo
+        unified["state"] = df["state"]
+        unified["state_slug"] = df["state"].apply(slugify)
+
+        reporting_jurisdiction = df.get("reporting_jurisdiction", df["state"])
+        unified["reporting_jurisdiction"] = reporting_jurisdiction
+        unified["reporting_jurisdiction_slug"] = reporting_jurisdiction.apply(slugify)
+
+        geo_name = df.get("geo_name", df["state"])
+        unified["geo_name"] = geo_name
+        unified["geo_name_slug"] = geo_name.apply(slugify)
+
+        geo_unit = df.get("geo_unit", "state")
+        if isinstance(geo_unit, str):
+            unified["geo_unit"] = geo_unit
+            unified["geo_unit_slug"] = slugify(geo_unit)
+        else:
+            unified["geo_unit"] = geo_unit
+            unified["geo_unit_slug"] = geo_unit.apply(slugify)
+
+        # Age group
+        age_group = self._clean_nullable(df.get("age_group"))
+        unified["age_group"] = age_group
+        unified["age_group_slug"] = age_group.apply(slugify)
+
+        # Other fields
+        unified["confirmation_status"] = self._clean_nullable(df.get("confirmation_status"))
         unified["outcome"] = df.get("outcome", "cases")
+        unified["count"] = df["count"]
 
         return unified
 
-    def _clean_nullable_column(self, series: pd.Series | None) -> pd.Series | None:
+    def _clean_nullable(self, series: pd.Series | None) -> pd.Series:
         """Clean nullable columns by converting placeholder strings to None."""
         if series is None:
-            return None
+            return pd.Series([None] * 0)
 
-        # Convert common placeholder strings to None
         placeholders = {"not specified", "unknown", "n/a", "na", ""}
         return series.apply(
             lambda x: None if pd.isna(x) or str(x).lower().strip() in placeholders else x
         )
 
-    def _normalize_subtype(self, series: pd.Series | None) -> pd.Series | None:
-        """Clean and normalize disease subtype to uppercase."""
-        if series is None:
-            return None
+    def _normalize_subtype(self, series: pd.Series | None) -> pd.Series:
+        """Normalize disease subtype values to canonical form.
 
-        # Convert common placeholder strings to None, uppercase valid values
-        placeholders = {"not specified", "unknown", "n/a", "na", ""}
-        return series.apply(
-            lambda x: None
-            if pd.isna(x) or str(x).lower().strip() in placeholders
-            else str(x).upper().strip()
-        )
+        Canonical values: A, B, C, W, X, Y, Z, unknown, unspecified
+        """
+        if series is None:
+            return pd.Series([None] * 0)
+
+        def normalize(x):
+            if pd.isna(x) or str(x).strip() == "":
+                return None
+            val = str(x).lower().strip()
+            # Normalize to canonical values
+            normalized = SUBTYPE_NORMALIZATION.get(val, x)
+            return normalized
+
+        return series.apply(normalize)

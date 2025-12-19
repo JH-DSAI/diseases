@@ -30,6 +30,8 @@ env/
 ENV/
 
 # Environment variables
+# .env.development and .env.production are tracked (no secrets)
+# .env is for local overrides and secrets (gitignored)
 .env
 .env.local
 

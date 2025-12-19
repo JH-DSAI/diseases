@@ -102,6 +102,8 @@ function createLineChart(lineData, selectedStates, rowData) {
     const svg = d3.create("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
+        .attr("role", "img")
+        .attr("aria-label", "State trend chart showing disease cases over time by state")
         .style("width", "100%")
         .style("height", "auto");
 
