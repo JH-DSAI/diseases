@@ -5,7 +5,7 @@ configfile: pyproject.toml
 testpaths: tests
 plugins: asyncio-0.24.0, anyio-4.11.0, cov-7.0.0
 asyncio: mode=Mode.AUTO, default_loop_scope=function
-collected 208 items
+collected 207 items
 
 tests/api/test_auth_middleware.py .................................      [ 15%]
 tests/api/test_disease_endpoints.py ...............                      [ 23%]
@@ -14,8 +14,8 @@ tests/api/test_health_endpoints.py ........                              [ 30%]
 tests/api/test_timeseries_endpoints.py ..............                    [ 37%]
 tests/etl/test_config.py .....                                           [ 39%]
 tests/etl/test_etl_integration.py ....................                   [ 49%]
-tests/etl/test_nndss_transformer.py ...............                      [ 56%]
-tests/etl/test_normalizers.py ...........................                [ 69%]
+tests/etl/test_nndss_transformer.py ...................                  [ 58%]
+tests/etl/test_normalizers.py ......................                     [ 69%]
 tests/etl/test_schema.py .......                                         [ 72%]
 tests/etl/test_tracker_transformer.py ..........                         [ 77%]
 tests/html/test_html_fragments.py ..........                             [ 82%]
@@ -28,21 +28,26 @@ _______________ coverage: platform linux, python 3.11.14-final-0 _______________
 
 Name                              Stmts   Miss  Cover   Missing
 ---------------------------------------------------------------
-app/database.py                     237     34    86%   38-39, 98-99, 102-103, 112-113, 125-126, 251, 324, 383, 560, 655-705
+app/database.py                     320     96    70%   38-39, 107, 112, 116-117, 126-127, 139-140, 306, 385, 450, 608-609, 612-613, 685, 790-841, 875-957, 979-999
 app/dependencies.py                  16      1    94%   23
-app/etl/base.py                      51      6    88%   117, 130, 170-173
+app/etl/base.py                      65     12    82%   69-71, 77-82, 149, 162, 181-184
 app/etl/config.py                    13      1    92%   14
+app/etl/normalizers/fips.py           6      6     0%   9-94
 app/etl/schema.py                    20      1    95%   12
-app/etl/transformers/nndss.py       119      8    93%   55, 106-107, 147, 151, 179-181
-app/etl/transformers/tracker.py      90     10    89%   55-56, 69-70, 73-74, 115, 117, 161, 172
-app/main.py                          40     17    58%   32-58, 71-72
+app/etl/storage.py                   33     18    45%   27-32, 59-79, 85
+app/etl/transformers/nndss.py       160     11    93%   141, 196-197, 203-204, 263, 268, 296-298, 361
+app/etl/transformers/tracker.py     116     14    88%   69-70, 83-84, 98-99, 102-103, 153, 155, 203-204, 224, 237
+app/main.py                          52     19    63%   25, 28, 49-75, 91-92
 app/middleware/auth.py               53      1    98%   105
-app/routers/api.py                   78     18    77%   62-64, 81-83, 115-117, 159-161, 190-192, 230-232
-app/routers/html_api.py              38      3    92%   123-126
+app/routers/api.py                   90     28    69%   64-66, 83-85, 117-119, 161-163, 192-194, 243-245, 267-294
+app/routers/html_api.py              55     14    75%   124-127, 145-156, 174-178, 206-211
+app/routers/pages.py                 29      9    69%   106-126
+app/routers/sql_api.py               58     31    47%   60-76, 82-84, 107-122, 145-158
+app/utils.py                         10     10     0%   3-41
 ---------------------------------------------------------------
-TOTAL                               935    100    89%
+TOTAL                              1242    272    78%
 
-13 files skipped due to complete coverage.
+12 files skipped due to complete coverage.
 Coverage HTML written to dir htmlcov
-Required test coverage of 70% reached. Total coverage: 89.30%
-============================= 208 passed in 2.75s ==============================
+Required test coverage of 70% reached. Total coverage: 78.10%
+============================= 207 passed in 3.28s ==============================
