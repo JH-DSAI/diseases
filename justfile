@@ -1,11 +1,18 @@
 # Disease Dashboard - Just Commands
 
-# Run development server (builds assets first)
+# Run development server (builds assets first, uses local data)
 dev:
     uv sync --extra dev
     just js-install
     just js-build
-    uv run uvicorn app.main:app --reload --reload-exclude '*.duckdb' --host 0.0.0.0 --port 8000
+    APP_ENV=development uv run uvicorn app.main:app --reload --reload-exclude '*.duckdb' --host 0.0.0.0 --port 8000
+
+# Run development server with production config (uses Azure data)
+dev-prod:
+    uv sync --extra dev
+    just js-install
+    just js-build
+    APP_ENV=production uv run uvicorn app.main:app --reload --reload-exclude '*.duckdb' --host 0.0.0.0 --port 8000
 
 # Run all tests
 test:

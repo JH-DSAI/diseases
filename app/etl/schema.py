@@ -20,11 +20,17 @@ REQUIRED_COLUMNS = [
     "disease_name",
     "disease_slug",
     "disease_subtype",
+    "disease_subtype_slug",
     "reporting_jurisdiction",
+    "reporting_jurisdiction_slug",
     "state",
+    "state_slug",
     "geo_name",
+    "geo_name_slug",
     "geo_unit",
+    "geo_unit_slug",
     "age_group",
+    "age_group_slug",
     "confirmation_status",
     "outcome",
     "count",
@@ -41,11 +47,17 @@ SCHEMA_DTYPES: dict[str, Any] = {
     "disease_name": "object",  # string
     "disease_slug": "object",  # string
     "disease_subtype": "object",  # string, nullable
+    "disease_subtype_slug": "object",  # string, nullable
     "reporting_jurisdiction": "object",  # string
+    "reporting_jurisdiction_slug": "object",  # string
     "state": "object",  # string
+    "state_slug": "object",  # string
     "geo_name": "object",  # string
+    "geo_name_slug": "object",  # string
     "geo_unit": "object",  # string
+    "geo_unit_slug": "object",  # string
     "age_group": "object",  # string, nullable
+    "age_group_slug": "object",  # string, nullable
     "confirmation_status": "object",  # string, nullable
     "outcome": "object",  # string
     "count": "Int64",  # nullable integer
@@ -56,7 +68,9 @@ SCHEMA_DTYPES: dict[str, Any] = {
 # Columns that are allowed to have null/NA values
 NULLABLE_COLUMNS = {
     "disease_subtype",
+    "disease_subtype_slug",
     "age_group",
+    "age_group_slug",
     "confirmation_status",
     "count",  # Some records may have missing counts
 }

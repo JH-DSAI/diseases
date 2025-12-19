@@ -134,3 +134,50 @@ class TestNNDSSTransformer:
         for slug in df["disease_slug"].unique():
             assert slug == slug.lower()
             assert " " not in slug
+
+    def test_disease_subtype_column_present(self, nndss_fixtures_dir: Path):
+        """Test disease_subtype column is present in output."""
+        transformer = NNDSSTransformer(nndss_fixtures_dir)
+        df = transformer.load()
+        assert "disease_subtype" in df.columns
+
+    def test_measles_aggregation(self, nndss_fixtures_dir: Path):
+        """Test Measles, Imported and Measles, Indigenous aggregate to Measles."""
+        transformer = NNDSSTransformer(nndss_fixtures_dir)
+        df = transformer.load()
+
+        # Disease names now use tracker canonical form (lowercase slug)
+        measles_records = df[df["disease_name"] == "measles"]
+        assert len(measles_records) > 0
+
+        # Original names should include the variants
+        original_names = measles_records["original_disease_name"].unique()
+        assert any("Imported" in str(n) for n in original_names)
+        assert any("Indigenous" in str(n) for n in original_names)
+
+        # Measles should have no subtype (imported/indigenous are aggregated)
+        assert measles_records["disease_subtype"].isna().all()
+
+    def test_meningococcal_subtype_extraction(self, nndss_fixtures_dir: Path):
+        """Test Meningococcal serogroups are extracted to disease_subtype."""
+        transformer = NNDSSTransformer(nndss_fixtures_dir)
+        df = transformer.load()
+
+        # Disease names now use tracker canonical form
+        mening_records = df[df["disease_name"] == "meningococcus"]
+        assert len(mening_records) > 0
+
+        # Check subtypes are extracted (after stripping "Serogroup " prefix)
+        subtypes = mening_records["disease_subtype"].dropna().unique()
+        assert "B" in subtypes
+        assert "ACWY" in subtypes
+
+    def test_meningococcal_all_serogroups_no_subtype(self, nndss_fixtures_dir: Path):
+        """Test Meningococcal All serogroups records have no subtype."""
+        transformer = NNDSSTransformer(nndss_fixtures_dir)
+        df = transformer.load()
+
+        # Records from "All serogroups" should have null subtype
+        all_serogroups = df[df["original_disease_name"].str.contains("All serogroups", na=False)]
+        if len(all_serogroups) > 0:
+            assert all_serogroups["disease_subtype"].isna().all()

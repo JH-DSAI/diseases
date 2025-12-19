@@ -13,7 +13,7 @@ import Alpine from 'alpinejs';
 // d3-selection
 import { create, select } from 'd3-selection';
 // d3-scale
-import { scaleLinear, scaleTime, scaleOrdinal, scaleBand, scaleSequential } from 'd3-scale';
+import { scaleLinear, scaleTime, scaleOrdinal, scaleBand, scaleSequential, scaleQuantile } from 'd3-scale';
 // d3-scale-chromatic
 import { interpolateBlues } from 'd3-scale-chromatic';
 // d3-axis
@@ -67,6 +67,7 @@ window.d3 = {
     scaleOrdinal,
     scaleBand,
     scaleSequential,
+    scaleQuantile,
     // d3-scale-chromatic
     interpolateBlues,
     // d3-axis

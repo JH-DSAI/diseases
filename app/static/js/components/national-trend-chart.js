@@ -17,10 +17,12 @@ function createNationalTrendChart(data, diseaseName, options = {}) {
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
-    // Create detached SVG
+    // Create detached SVG with accessibility attributes
     const svg = d3.create("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .attr("preserveAspectRatio", "xMidYMid meet")
+        .attr("role", "img")
+        .attr("aria-label", `National trend chart showing ${diseaseName} cases over time`)
         .style("width", "100%")
         .style("height", "auto");
 

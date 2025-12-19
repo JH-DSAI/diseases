@@ -116,7 +116,7 @@
         </div>
     </div>
 
-    {% if disease_slug == 'meningococcal-disease' %}
+    {% if disease_slug == 'meningococcus' %}
     <!-- Serotype Analysis (Meningococcus only) - loaded via HTMX -->
     <div hx-get="/api/html/disease/{{ disease_slug }}/serotypes"
          hx-trigger="load"

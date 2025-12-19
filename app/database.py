@@ -12,7 +12,7 @@ import duckdb
 
 from app.config import settings
 from app.etl.config import get_transformer, list_sources
-from app.etl.normalizers.disease_names import TRACKER_TO_NNDSS
+from app.etl.normalizers.slugify import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +51,17 @@ class DiseaseDatabase:
                 disease_name VARCHAR,
                 disease_slug VARCHAR,
                 disease_subtype VARCHAR,
+                disease_subtype_slug VARCHAR,
                 reporting_jurisdiction VARCHAR,
+                reporting_jurisdiction_slug VARCHAR,
                 state VARCHAR,
+                state_slug VARCHAR,
                 geo_name VARCHAR,
+                geo_name_slug VARCHAR,
                 geo_unit VARCHAR,
+                geo_unit_slug VARCHAR,
                 age_group VARCHAR,
+                age_group_slug VARCHAR,
                 confirmation_status VARCHAR,
                 outcome VARCHAR,
                 count BIGINT,
@@ -73,6 +79,9 @@ class DiseaseDatabase:
 
         # Create disease name mapping table for reference
         self._create_disease_mapping_table()
+
+        # Create merged view for mixed-source queries (tracker takes priority over NNDSS)
+        self._create_merged_view()
 
         self._initialized = True
 
@@ -143,26 +152,67 @@ class DiseaseDatabase:
         logger.info("Created database indexes")
 
     def _create_disease_mapping_table(self) -> None:
-        """Create and populate the disease name mapping table for reference."""
+        """Create disease slug reference table from loaded data."""
         conn = self.connect()
 
         conn.execute("DROP TABLE IF EXISTS disease_name_mapping")
         conn.execute("""
-            CREATE TABLE disease_name_mapping (
-                tracker_name VARCHAR,
-                nndss_name VARCHAR,
-                PRIMARY KEY (tracker_name)
-            )
+            CREATE TABLE disease_name_mapping AS
+            SELECT DISTINCT
+                disease_slug,
+                disease_name,
+                data_source
+            FROM disease_data
+            ORDER BY disease_slug, data_source
         """)
 
-        for tracker_name, nndss_name in TRACKER_TO_NNDSS.items():
-            conn.execute(
-                "INSERT INTO disease_name_mapping (tracker_name, nndss_name) VALUES (?, ?)",
-                [tracker_name, nndss_name],
-            )
-
         mapping_count = conn.execute("SELECT COUNT(*) FROM disease_name_mapping").fetchone()[0]
-        logger.info(f"Created disease_name_mapping table with {mapping_count} mappings")
+        logger.info(f"Created disease_name_mapping table with {mapping_count} entries")
+
+    def _create_merged_view(self) -> None:
+        """Create a merged view that deduplicates tracker and NNDSS data.
+
+        For diseases with data from both sources, this view:
+        1. Aggregates records to (disease, state, month) level
+        2. Applies source priority: tracker > NNDSS
+        3. Keeps only one record per (disease, state, month) combination
+
+        This implements the "filler pattern" where NNDSS fills gaps where
+        tracker data doesn't exist.
+        """
+        conn = self.connect()
+
+        conn.execute("DROP VIEW IF EXISTS disease_data_merged")
+        conn.execute("""
+            CREATE VIEW disease_data_merged AS
+            WITH monthly_aggregated AS (
+                -- Aggregate all records to monthly state level
+                SELECT
+                    disease_name,
+                    disease_slug,
+                    state,
+                    DATE_TRUNC('month', report_period_start) as month,
+                    data_source,
+                    SUM(count) as count
+                FROM disease_data
+                WHERE state IS NOT NULL AND state != ''
+                GROUP BY disease_name, disease_slug, state,
+                         DATE_TRUNC('month', report_period_start), data_source
+            ),
+            ranked AS (
+                -- Rank by source priority (tracker=1, nndss=2)
+                SELECT *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY disease_name, state, month
+                        ORDER BY CASE WHEN data_source = 'tracker' THEN 1 ELSE 2 END
+                    ) as rn
+                FROM monthly_aggregated
+            )
+            SELECT disease_name, disease_slug, state, month, data_source, count
+            FROM ranked
+            WHERE rn = 1
+        """)
+        logger.info("Created disease_data_merged view for mixed-source deduplication")
 
     def is_initialized(self) -> bool:
         """Check if database has been initialized with data."""
@@ -293,7 +343,11 @@ class DiseaseDatabase:
             return [row[0] for row in result]
 
     def get_summary_stats(self, data_source: str | None = None) -> dict:
-        """Get summary statistics across all data."""
+        """Get summary statistics across all data.
+
+        When data_source is None, uses the merged view for total_cases
+        which applies tracker > NNDSS priority to avoid double-counting.
+        """
         if not self._initialized:
             return {}
 
@@ -314,12 +368,14 @@ class DiseaseDatabase:
                     [data_source],
                 ).fetchone()
             else:
+                # Use merged view for total_cases to apply deduplication
+                # Other stats (records, dates) come from raw data for completeness
                 stats = self.conn.execute("""
                     SELECT
                         COUNT(*) as total_records,
                         COUNT(DISTINCT disease_name) as total_diseases,
                         COUNT(DISTINCT state) as total_states,
-                        SUM(count) as total_cases,
+                        (SELECT SUM(count) FROM disease_data_merged) as total_cases,
                         MIN(report_period_start) as earliest_date,
                         MAX(report_period_end) as latest_date
                     FROM disease_data
@@ -348,12 +404,17 @@ class DiseaseDatabase:
             }
 
     def get_disease_totals(self, data_source: str | None = None) -> list[dict]:
-        """Get total case counts for each disease."""
+        """Get total case counts for each disease.
+
+        When data_source is None, uses the merged view which applies
+        tracker > NNDSS priority to avoid double-counting.
+        """
         if not self._initialized:
             return []
 
         with self._lock:
             if data_source:
+                # Filter to specific source
                 result = self.conn.execute(
                     """
                     SELECT disease_name, SUM(count) as total_cases
@@ -365,9 +426,10 @@ class DiseaseDatabase:
                     [data_source],
                 ).fetchall()
             else:
+                # Use merged view for mixed sources (tracker > NNDSS priority)
                 result = self.conn.execute("""
                     SELECT disease_name, SUM(count) as total_cases
-                    FROM disease_data
+                    FROM disease_data_merged
                     GROUP BY disease_name
                     ORDER BY disease_name
                 """).fetchall()
@@ -420,41 +482,74 @@ class DiseaseDatabase:
             ]
 
     def get_disease_stats(self, disease_name: str, data_source: str | None = None) -> dict:
-        """Get summary statistics for a specific disease."""
+        """Get summary statistics for a specific disease.
+
+        When data_source is None, uses the merged view for total_cases and
+        affected_states which applies tracker > NNDSS priority.
+        """
         if not self._initialized:
             return {}
 
         with self._lock:
-            where_clause = (
+            if data_source:
+                # Filter to specific source - use raw data
+                where_clause = "WHERE disease_name = ? AND data_source = ?"
+                params = [disease_name, data_source]
+
+                total_cases_result = self.conn.execute(
+                    f"""
+                    SELECT SUM(count) as total_cases FROM disease_data {where_clause}
+                """,
+                    params,
+                ).fetchone()
+
+                affected_states_result = self.conn.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT state) as affected_states FROM disease_data {where_clause}
+                """,
+                    params,
+                ).fetchone()
+            else:
+                # Use merged view for mixed sources (tracker > NNDSS priority)
+                params = [disease_name]
+
+                total_cases_result = self.conn.execute(
+                    """
+                    SELECT SUM(count) as total_cases
+                    FROM disease_data_merged
+                    WHERE disease_name = ?
+                """,
+                    params,
+                ).fetchone()
+
+                affected_states_result = self.conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT state) as affected_states
+                    FROM disease_data_merged
+                    WHERE disease_name = ?
+                """,
+                    params,
+                ).fetchone()
+
+            total_cases = int(total_cases_result[0]) if total_cases_result[0] else 0
+            affected_states = int(affected_states_result[0]) if affected_states_result[0] else 0
+
+            # affected_counties and two_week_cases use raw data
+            # (merged view doesn't have geo_name or report_period_end)
+            raw_where_clause = (
                 "WHERE disease_name = ?"
                 if not data_source
                 else "WHERE disease_name = ? AND data_source = ?"
             )
-            params = [disease_name] if not data_source else [disease_name, data_source]
-
-            total_cases_result = self.conn.execute(
-                f"""
-                SELECT SUM(count) as total_cases FROM disease_data {where_clause}
-            """,
-                params,
-            ).fetchone()
-            total_cases = int(total_cases_result[0]) if total_cases_result[0] else 0
-
-            affected_states_result = self.conn.execute(
-                f"""
-                SELECT COUNT(DISTINCT state) as affected_states FROM disease_data {where_clause}
-            """,
-                params,
-            ).fetchone()
-            affected_states = int(affected_states_result[0]) if affected_states_result[0] else 0
+            raw_params = [disease_name] if not data_source else [disease_name, data_source]
 
             affected_counties_result = self.conn.execute(
                 f"""
                 SELECT COUNT(DISTINCT geo_name) as affected_counties
                 FROM disease_data
-                {where_clause} AND geo_name IS NOT NULL AND geo_name != ''
+                {raw_where_clause} AND geo_name IS NOT NULL AND geo_name != ''
             """,
-                params,
+                raw_params,
             ).fetchone()
             affected_counties = (
                 int(affected_counties_result[0]) if affected_counties_result[0] else 0
@@ -463,15 +558,15 @@ class DiseaseDatabase:
             latest_two_week_result = self.conn.execute(
                 f"""
                 WITH latest_date AS (
-                    SELECT MAX(report_period_end) as max_date FROM disease_data {where_clause}
+                    SELECT MAX(report_period_end) as max_date FROM disease_data {raw_where_clause}
                 )
                 SELECT SUM(count) as two_week_cases
                 FROM disease_data
-                {where_clause}
+                {raw_where_clause}
                   AND report_period_end >= (SELECT max_date - INTERVAL 14 DAYS FROM latest_date)
                   AND report_period_end <= (SELECT max_date FROM latest_date)
             """,
-                params + params,
+                raw_params + raw_params,
             ).fetchone()
             two_week_cases = int(latest_two_week_result[0]) if latest_two_week_result[0] else 0
 
@@ -657,91 +752,96 @@ class DiseaseDatabase:
     ) -> dict:
         """Get serotype/subtype distribution by state for a disease.
 
-        Only returns data for states that have serotype information
-        (disease_subtype not null and not 'na').
+        Uses slug columns for consistent matching across data sources.
+        Only returns data for states that have serotype information.
         """
         if not self._initialized:
             return {"states": {}, "serotypes": [], "available_states": []}
 
         with self._lock:
-            where_clause = (
-                "WHERE disease_name = ?"
-                if not data_source
-                else "WHERE disease_name = ? AND data_source = ?"
-            )
-            params = [disease_name] if not data_source else [disease_name, data_source]
+            # Use disease_slug for matching
+            disease_slug = slugify(disease_name)
 
-            # Get states that have serotype data (non-null and non-'na' subtypes)
+            where_clause = (
+                "WHERE disease_slug = ?"
+                if not data_source
+                else "WHERE disease_slug = ? AND data_source = ?"
+            )
+            params = [disease_slug] if not data_source else [disease_slug, data_source]
+
+            # Get states that have serotype data (non-null subtype slugs)
             states_result = self.conn.execute(
                 f"""
-                SELECT DISTINCT state FROM disease_data
+                SELECT DISTINCT state, state_slug FROM disease_data
                 {where_clause}
-                  AND disease_subtype IS NOT NULL
-                  AND LOWER(disease_subtype) != 'na'
-                ORDER BY state
+                  AND disease_subtype_slug IS NOT NULL
+                ORDER BY state_slug
             """,
                 params,
             ).fetchall()
-            available_states = [row[0] for row in states_result]
+            # Build mapping from slug to display name
+            state_slug_to_name = {row[1]: row[0] for row in states_result}
+            available_state_slugs = list(state_slug_to_name.keys())
 
-            if not available_states:
+            if not available_state_slugs:
                 return {"states": {}, "serotypes": [], "available_states": []}
 
-            # Get all serotypes present in the data
+            # Get all serotypes present in the data (using slugs for deduplication)
             serotype_result = self.conn.execute(
                 f"""
-                SELECT DISTINCT disease_subtype FROM disease_data
+                SELECT DISTINCT disease_subtype_slug FROM disease_data
                 {where_clause}
-                  AND disease_subtype IS NOT NULL
-                  AND LOWER(disease_subtype) != 'na'
-                ORDER BY disease_subtype
+                  AND disease_subtype_slug IS NOT NULL
+                ORDER BY disease_subtype_slug
             """,
                 params,
             ).fetchall()
-            serotypes = [row[0].upper() for row in serotype_result]
+            serotype_slugs = [row[0] for row in serotype_result]
 
-            # Get serotype counts by state
+            # Get serotype counts by state (grouped by slugs)
             distribution_result = self.conn.execute(
                 f"""
-                SELECT state, disease_subtype, SUM(count) as total_cases
+                SELECT state_slug, disease_subtype_slug, SUM(count) as total_cases
                 FROM disease_data
                 {where_clause}
-                  AND disease_subtype IS NOT NULL
-                  AND LOWER(disease_subtype) != 'na'
-                GROUP BY state, disease_subtype
-                ORDER BY state, disease_subtype
+                  AND disease_subtype_slug IS NOT NULL
+                GROUP BY state_slug, disease_subtype_slug
+                ORDER BY state_slug, disease_subtype_slug
             """,
                 params,
             ).fetchall()
 
             # Build state data with counts and percentages
             states_data = {}
-            for state in available_states:
+            for state_slug in available_state_slugs:
                 state_total = 0
                 state_serotype_counts = {}
 
                 for row in distribution_result:
-                    if row[0] == state:
-                        serotype_key = row[1].upper()
+                    if row[0] == state_slug:
+                        serotype_slug = row[1]
                         count = int(row[2]) if row[2] else 0
-                        state_serotype_counts[serotype_key] = count
+                        state_serotype_counts[serotype_slug] = count
                         state_total += count
 
                 state_serotype_data = {}
-                for serotype in serotypes:
-                    count = state_serotype_counts.get(serotype, 0)
+                for serotype_slug in serotype_slugs:
+                    count = state_serotype_counts.get(serotype_slug, 0)
                     percentage = (count / state_total * 100) if state_total > 0 else 0
-                    state_serotype_data[serotype] = {
+                    state_serotype_data[serotype_slug] = {
                         "count": count,
                         "percentage": round(percentage, 2),
                     }
 
-                states_data[state] = state_serotype_data
+                # Use display name (state code) as key for frontend
+                state_display = state_slug_to_name.get(state_slug, state_slug)
+                states_data[state_display] = state_serotype_data
 
+            # Return slugs as serotype keys (frontend will use these)
             return {
                 "states": states_data,
-                "serotypes": serotypes,
-                "available_states": available_states,
+                "serotypes": serotype_slugs,
+                "available_states": list(state_slug_to_name.values()),
             }
 
     def get_state_case_totals(
@@ -755,6 +855,9 @@ class DiseaseDatabase:
 
         Returns data suitable for a USA choropleth map, with FIPS codes
         for TopoJSON compatibility.
+
+        When data_source is None, uses the merged view which applies
+        tracker > NNDSS priority to avoid double-counting.
 
         Args:
             disease_name: Name of the disease
@@ -775,36 +878,58 @@ class DiseaseDatabase:
         from app.etl.normalizers.fips import STATE_TO_FIPS
 
         with self._lock:
-            # Build WHERE clause dynamically
-            conditions = ["disease_name = ?"]
-            params = [disease_name]
-
             if data_source:
-                conditions.append("data_source = ?")
-                params.append(data_source)
+                # Filter to specific source - use raw data
+                conditions = ["disease_name = ?", "data_source = ?"]
+                params = [disease_name, data_source]
 
-            if start_date:
-                conditions.append("report_period_start >= ?")
-                params.append(start_date)
+                if start_date:
+                    conditions.append("report_period_start >= ?")
+                    params.append(start_date)
 
-            if end_date:
-                conditions.append("report_period_end <= ?")
-                params.append(end_date)
+                if end_date:
+                    conditions.append("report_period_end <= ?")
+                    params.append(end_date)
 
-            where_clause = "WHERE " + " AND ".join(conditions)
+                where_clause = "WHERE " + " AND ".join(conditions)
 
-            result = self.conn.execute(
-                f"""
-                SELECT state, SUM(count) as total_cases
-                FROM disease_data
-                {where_clause}
-                  AND state IS NOT NULL
-                  AND state != ''
-                GROUP BY state
-                ORDER BY state
-            """,
-                params,
-            ).fetchall()
+                result = self.conn.execute(
+                    f"""
+                    SELECT state, SUM(count) as total_cases
+                    FROM disease_data
+                    {where_clause}
+                      AND state IS NOT NULL
+                      AND state != ''
+                    GROUP BY state
+                    ORDER BY state
+                """,
+                    params,
+                ).fetchall()
+            else:
+                # Use merged view for mixed sources (tracker > NNDSS priority)
+                conditions = ["disease_name = ?"]
+                params = [disease_name]
+
+                if start_date:
+                    conditions.append("month >= ?")
+                    params.append(start_date)
+
+                if end_date:
+                    conditions.append("month <= ?")
+                    params.append(end_date)
+
+                where_clause = "WHERE " + " AND ".join(conditions)
+
+                result = self.conn.execute(
+                    f"""
+                    SELECT state, SUM(count) as total_cases
+                    FROM disease_data_merged
+                    {where_clause}
+                    GROUP BY state
+                    ORDER BY state
+                """,
+                    params,
+                ).fetchall()
 
             states_data = {}
             available_states = []

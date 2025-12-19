@@ -8,14 +8,98 @@ Supports both local filesystem and remote storage (Azure Blob, S3) via fsspec.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 
 import pandas as pd
 
 from app.etl.base import DataSourceTransformer
-from app.etl.normalizers.disease_names import normalize_nndss_disease_name
-from app.etl.normalizers.geo import STATE_CODES, classify_geo_unit
+from app.etl.normalizers.geo import classify_geo_unit
+from app.etl.normalizers.slugify import slugify
 from app.etl.storage import is_remote_uri
+
+# Map NNDSS base disease names (slugified) to tracker canonical names
+NNDSS_TO_TRACKER_SLUG = {
+    "meningococcal-disease": "meningococcus",
+    "measles": "measles",
+    "pertussis": "pertussis",
+}
+
+# Prefixes to strip from subtypes (lowercase for comparison)
+SUBTYPE_PREFIXES = ["serogroup ", "serogroups "]
+
+# Aggregate subtypes that should be null (not individual data)
+# - "all serogroups" is a total row for meningococcal
+# - "imported"/"indigenous" are classification metadata for measles, not subtypes
+AGGREGATE_SUBTYPES = {"all serogroups", "total", "all", "imported", "indigenous"}
+
+# Normalize NNDSS subtype names to canonical tracker values
+# See docs/data-decisions.md for rationale
+SUBTYPE_NORMALIZATION = {
+    "other": "unspecified",
+    "unknown": "unknown",
+}
+
+# State name to 2-letter code mapping
+STATE_CODES = {
+    "ALABAMA": "AL",
+    "ALASKA": "AK",
+    "ARIZONA": "AZ",
+    "ARKANSAS": "AR",
+    "CALIFORNIA": "CA",
+    "COLORADO": "CO",
+    "CONNECTICUT": "CT",
+    "DELAWARE": "DE",
+    "FLORIDA": "FL",
+    "GEORGIA": "GA",
+    "HAWAII": "HI",
+    "IDAHO": "ID",
+    "ILLINOIS": "IL",
+    "INDIANA": "IN",
+    "IOWA": "IA",
+    "KANSAS": "KS",
+    "KENTUCKY": "KY",
+    "LOUISIANA": "LA",
+    "MAINE": "ME",
+    "MARYLAND": "MD",
+    "MASSACHUSETTS": "MA",
+    "MICHIGAN": "MI",
+    "MINNESOTA": "MN",
+    "MISSISSIPPI": "MS",
+    "MISSOURI": "MO",
+    "MONTANA": "MT",
+    "NEBRASKA": "NE",
+    "NEVADA": "NV",
+    "NEW HAMPSHIRE": "NH",
+    "NEW JERSEY": "NJ",
+    "NEW MEXICO": "NM",
+    "NEW YORK": "NY",
+    "NEW YORK CITY": "NYC",
+    "NORTH CAROLINA": "NC",
+    "NORTH DAKOTA": "ND",
+    "OHIO": "OH",
+    "OKLAHOMA": "OK",
+    "OREGON": "OR",
+    "PENNSYLVANIA": "PA",
+    "RHODE ISLAND": "RI",
+    "SOUTH CAROLINA": "SC",
+    "SOUTH DAKOTA": "SD",
+    "TENNESSEE": "TN",
+    "TEXAS": "TX",
+    "UTAH": "UT",
+    "VERMONT": "VT",
+    "VIRGINIA": "VA",
+    "WASHINGTON": "WA",
+    "WEST VIRGINIA": "WV",
+    "WISCONSIN": "WI",
+    "WYOMING": "WY",
+    "DISTRICT OF COLUMBIA": "DC",
+    "AMERICAN SAMOA": "AS",
+    "GUAM": "GU",
+    "NORTHERN MARIANA ISLANDS": "MP",
+    "PUERTO RICO": "PR",
+    "VIRGIN ISLANDS": "VI",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -241,19 +325,71 @@ class NNDSSTransformer(DataSourceTransformer):
         return df
 
     def _normalize_disease_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Normalize disease names to handle NNDSS inconsistencies."""
+        """Parse NNDSS labels to extract base disease name and subtype.
+
+        NNDSS labels encode subtypes after a comma:
+        - "Measles, Imported" → base="Measles", subtype="Imported"
+        - "Meningococcal disease, Serogroup B" → base="Meningococcal disease", subtype="B"
+        - "Pertussis" → base="Pertussis", subtype=None
+
+        Subtype processing:
+        - Strip "Serogroup " / "Serogroups " prefix: "Serogroup B" → "B"
+        - Set aggregate subtypes to None: "All serogroups" → None
+        """
         df = df.copy()
 
-        # Store original name
+        # Store original name before any transformation
         df["original_disease_name"] = df["Label"]
 
-        # Apply normalization
-        df["disease_name"] = df["Label"].apply(normalize_nndss_disease_name)
-
-        # Disease subtype not provided in NNDSS weekly data
-        df["disease_subtype"] = None
+        # Parse labels into (base_name, subtype)
+        parsed = df["Label"].apply(self._parse_nndss_label)
+        df["disease_name"] = parsed.apply(lambda x: x[0])
+        df["disease_subtype"] = parsed.apply(lambda x: x[1])
 
         return df
+
+    def _parse_nndss_label(self, label: str) -> tuple[str, str | None]:
+        """Parse 'Disease, Subtype info' into (base_name, subtype).
+
+        Args:
+            label: NNDSS disease label (e.g., "Meningococcal disease, Serogroup B")
+
+        Returns:
+            Tuple of (base_name, subtype) where subtype may be None
+        """
+        if pd.isna(label):
+            return (None, None)
+
+        label = str(label).strip()
+
+        if "," not in label:
+            return (label, None)
+
+        parts = label.split(",", 1)
+        base_name = parts[0].strip()
+        subtype_raw = parts[1].strip() if len(parts) > 1 else None
+
+        if subtype_raw:
+            # Check for aggregate subtypes (should be null)
+            if subtype_raw.lower() in AGGREGATE_SUBTYPES:
+                return (base_name, None)
+
+            # Strip known prefixes from subtype ("Serogroup B" → "B")
+            subtype_lower = subtype_raw.lower()
+            for prefix in SUBTYPE_PREFIXES:
+                if subtype_lower.startswith(prefix):
+                    subtype_raw = subtype_raw[len(prefix) :]
+                    break
+
+            # Strip "serogroup(s)" suffix ("Other serogroups" → "Other")
+            subtype_raw = re.sub(
+                r"\s*serogroups?\s*$", "", subtype_raw, flags=re.IGNORECASE
+            ).strip()
+
+            # Normalize to canonical values ("Other" → "unspecified")
+            subtype_raw = SUBTYPE_NORMALIZATION.get(subtype_raw.lower(), subtype_raw)
+
+        return (base_name, subtype_raw if subtype_raw else None)
 
     def _create_state_codes(self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert state names to 2-letter codes."""
@@ -284,23 +420,53 @@ class NNDSSTransformer(DataSourceTransformer):
         return df
 
     def _map_to_unified_schema(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Map NNDSS fields to the unified disease_data schema."""
+        """Map NNDSS fields to the unified disease_data schema.
+
+        Maps NNDSS disease names to tracker canonical names for consistency.
+        All dimension columns get corresponding _slug columns for matching.
+        """
         unified = pd.DataFrame()
 
+        # Date/time fields
         unified["report_period_start"] = df["report_period_start"]
         unified["report_period_end"] = df["report_period_end"]
         unified["date_type"] = "mmwr"
         unified["time_unit"] = "week"
-        unified["disease_name"] = df["disease_name"]
+
+        # Disease - map NNDSS base names to tracker canonical names
+        # Both disease_name and disease_slug use tracker canonical form for consistency
+        base_slugs = df["disease_name"].apply(slugify)
+        unified["disease_slug"] = base_slugs.apply(
+            lambda s: NNDSS_TO_TRACKER_SLUG.get(s, s) if s else None
+        )
+        # disease_name uses the canonical slug (tracker names are lowercase)
+        unified["disease_name"] = unified["disease_slug"]
+        unified["original_disease_name"] = df["original_disease_name"]
+
+        # Disease subtype
         unified["disease_subtype"] = df["disease_subtype"]
+        unified["disease_subtype_slug"] = df["disease_subtype"].apply(slugify)
+
+        # State/Geo
         unified["state"] = df["state"]
+        unified["state_slug"] = df["state"].apply(slugify)
+
         unified["reporting_jurisdiction"] = df["state"]
+        unified["reporting_jurisdiction_slug"] = df["state"].apply(slugify)
+
         unified["geo_name"] = df["Reporting Area"]
+        unified["geo_name_slug"] = df["Reporting Area"].apply(slugify)
+
         unified["geo_unit"] = df["geo_unit"]
-        unified["age_group"] = None  # NNDSS weekly data doesn't include age groups
+        unified["geo_unit_slug"] = df["geo_unit"].apply(slugify)
+
+        # Age group - NNDSS weekly data doesn't include age groups
+        unified["age_group"] = None
+        unified["age_group_slug"] = None
+
+        # Other fields
         unified["confirmation_status"] = None
         unified["outcome"] = "cases"
         unified["count"] = df["count"]
-        unified["original_disease_name"] = df["original_disease_name"]
 
         return unified

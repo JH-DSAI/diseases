@@ -3,7 +3,7 @@
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from app.database import db
 from app.dependencies import run_db_query
@@ -34,6 +34,7 @@ async def landing_page(request: Request, data_source: str | None = None):
         "index.html",
         {
             "page_title": "Disease Dashboard",
+            "meta_description": "Track US infectious disease surveillance data with interactive visualizations, state-by-state analysis, and trend charts.",
             "data_source_filter": data_source,
         },
     )
@@ -87,5 +88,42 @@ async def disease_detail_page(request: Request, disease_slug: str):
             "page_title": f"{disease_name.title()} Dashboard"
             if disease_name
             else "Disease Dashboard",
+            "meta_description": f"View {disease_name.title() if disease_name else 'disease'} surveillance data, trends, state-by-state analysis, and demographic breakdowns."
+            if disease_name
+            else "View disease surveillance data, trends, and state-by-state analysis.",
         },
+    )
+
+
+@router.get("/sitemap.xml", response_class=Response)
+async def sitemap(request: Request):
+    """
+    Generate XML sitemap for search engines.
+
+    Returns:
+        XML sitemap with all disease pages
+    """
+    base_url = str(request.base_url).rstrip("/")
+
+    # Start XML
+    xml_parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        f"  <url><loc>{base_url}/</loc><priority>1.0</priority></url>",
+    ]
+
+    # Add disease pages
+    if db.is_initialized():
+        diseases = await run_db_query(db.get_diseases_with_slugs)
+        for disease in diseases:
+            slug = disease.get("slug", "")
+            xml_parts.append(
+                f"  <url><loc>{base_url}/disease/{slug}</loc><priority>0.8</priority></url>"
+            )
+
+    xml_parts.append("</urlset>")
+
+    return Response(
+        content="\n".join(xml_parts),
+        media_type="application/xml",
     )
