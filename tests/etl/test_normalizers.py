@@ -3,68 +3,70 @@
 import pandas as pd
 
 from app.etl.normalizers.disease_names import (
-    apply_disease_aliases,
-    normalize_disease_name,
-    normalize_nndss_disease_name,
-    normalize_tracker_disease_name,
+    DISEASE_DISPLAY_NAMES,
+    get_display_name,
 )
 from app.etl.normalizers.geo import (
+    NATIONAL_SLUGS,
+    REGION_SLUGS,
     classify_geo_unit,
-    is_region,
-    normalize_state_code,
 )
+from app.etl.normalizers.slugify import slugify
 
 
-class TestNormalizeStateCode:
-    """Tests for normalize_state_code function."""
+class TestSlugify:
+    """Tests for slugify function."""
 
-    def test_valid_state_name(self):
-        """Test conversion of full state name to code."""
-        assert normalize_state_code("California") == "CA"
-        assert normalize_state_code("CALIFORNIA") == "CA"
-        assert normalize_state_code("california") == "CA"
+    def test_basic_slugify(self):
+        """Test basic string slugification."""
+        assert slugify("Hello World") == "hello-world"
+        assert slugify("Meningococcal disease") == "meningococcal-disease"
 
-    def test_already_code(self):
-        """Test that state codes pass through."""
-        assert normalize_state_code("CA") == "CA"
-        assert normalize_state_code("NY") == "NY"
+    def test_removes_punctuation(self):
+        """Test punctuation is removed."""
+        assert slugify("U.S. Residents") == "us-residents"
+        assert slugify("Hansen's Disease") == "hansens-disease"
+        assert slugify("Test, with, commas") == "test-with-commas"
 
-    def test_empty_returns_empty(self):
-        """Test empty string returns empty."""
-        assert normalize_state_code("") == ""
+    def test_handles_case(self):
+        """Test case normalization."""
+        assert slugify("OTHER") == "other"
+        assert slugify("Other") == "other"
+        assert slugify("other") == "other"
+
+    def test_collapses_whitespace(self):
+        """Test multiple spaces collapse to single hyphen."""
+        assert slugify("Hello   World") == "hello-world"
+        assert slugify("  padded  ") == "padded"
+
+    def test_underscores_to_hyphens(self):
+        """Test underscores become hyphens."""
+        assert slugify("hello_world") == "hello-world"
 
     def test_none_returns_none(self):
         """Test None returns None."""
-        assert normalize_state_code(None) is None
+        assert slugify(None) is None
 
-    def test_unknown_returns_original(self):
-        """Test unknown names pass through."""
-        assert normalize_state_code("Unknown Place") == "Unknown Place"
+    def test_nan_returns_none(self):
+        """Test NaN returns None."""
+        assert slugify(pd.NA) is None
 
+    def test_empty_returns_none(self):
+        """Test empty string returns None."""
+        assert slugify("") is None
+        assert slugify("   ") is None
 
-class TestIsRegion:
-    """Tests for is_region function."""
+    def test_state_codes(self):
+        """Test state codes slugify correctly."""
+        assert slugify("CA") == "ca"
+        assert slugify("NY") == "ny"
+        assert slugify("NYC") == "nyc"
 
-    def test_region_names(self):
-        """Test regional aggregate names."""
-        assert is_region("US RESIDENTS") is True
-        assert is_region("PACIFIC") is True
-        assert is_region("NEW ENGLAND") is True
-        assert is_region("TOTAL") is True
-
-    def test_state_names(self):
-        """Test state names are not regions."""
-        assert is_region("California") is False
-        assert is_region("CA") is False
-        assert is_region("New York") is False
-
-    def test_empty_returns_false(self):
-        """Test empty string returns False."""
-        assert is_region("") is False
-
-    def test_none_returns_false(self):
-        """Test None returns False."""
-        assert is_region(None) is False
+    def test_serogroups(self):
+        """Test serogroup slugification."""
+        assert slugify("B") == "b"
+        assert slugify("ACWY") == "acwy"
+        assert slugify("Other") == "other"
 
 
 class TestClassifyGeoUnit:
@@ -76,11 +78,19 @@ class TestClassifyGeoUnit:
         assert classify_geo_unit("NON-US RESIDENTS") == "national"
         assert classify_geo_unit("TOTAL") == "national"
 
+    def test_national_with_punctuation(self):
+        """Test national level with punctuation variations."""
+        # The bug case - periods and different casing
+        assert classify_geo_unit("U.S. Residents") == "national"
+        assert classify_geo_unit("U.S.Residents") == "national"
+        assert classify_geo_unit("us residents") == "national"
+
     def test_region_level(self):
         """Test region level classifications."""
         assert classify_geo_unit("PACIFIC") == "region"
         assert classify_geo_unit("NEW ENGLAND") == "region"
         assert classify_geo_unit("MOUNTAIN") == "region"
+        assert classify_geo_unit("pacific") == "region"
 
     def test_state_level(self):
         """Test state level classifications."""
@@ -97,78 +107,46 @@ class TestClassifyGeoUnit:
         assert classify_geo_unit(None) == "state"
 
 
-class TestNormalizeTrackerDiseaseName:
-    """Tests for normalize_tracker_disease_name function."""
+class TestGetDisplayName:
+    """Tests for get_display_name function."""
 
-    def test_mapped_disease(self):
-        """Test diseases with known mappings."""
-        assert normalize_tracker_disease_name("measles") == "Measles"
-        assert normalize_tracker_disease_name("pertussis") == "Pertussis"
+    def test_known_disease(self):
+        """Test known disease mapping."""
+        assert get_display_name("meningococcus") == "Meningococcal Disease"
+        assert get_display_name("measles") == "Measles"
+        assert get_display_name("pertussis") == "Pertussis"
 
-    def test_unmapped_disease(self):
-        """Test diseases without mappings pass through."""
-        assert normalize_tracker_disease_name("Unknown Disease") == "Unknown Disease"
-
-    def test_nan_returns_nan(self):
-        """Test NaN values pass through."""
-        result = normalize_tracker_disease_name(pd.NA)
-        assert pd.isna(result)
+    def test_unknown_disease_titlecase(self):
+        """Test unknown disease gets title-cased."""
+        assert get_display_name("unknown-disease") == "Unknown Disease"
+        assert get_display_name("some-new-disease") == "Some New Disease"
 
 
-class TestNormalizeNndssDiseaseName:
-    """Tests for normalize_nndss_disease_name function."""
+class TestSlugConstants:
+    """Tests for slug constant sets."""
 
-    def test_title_case(self):
-        """Test title case normalization."""
-        assert normalize_nndss_disease_name("measles") == "Measles"
+    def test_national_slugs_are_slugified(self):
+        """Test national slugs are properly formatted."""
+        for slug in NATIONAL_SLUGS:
+            assert slug == slug.lower()
+            assert " " not in slug
+            assert "." not in slug
 
-    def test_apostrophe_fix(self):
-        """Test apostrophe-S fix (Hansen'S -> Hansen's)."""
-        assert "Hansen's" in normalize_nndss_disease_name("hansen's disease")
+    def test_region_slugs_are_slugified(self):
+        """Test region slugs are properly formatted."""
+        for slug in REGION_SLUGS:
+            assert slug == slug.lower()
+            assert " " not in slug
+            assert "." not in slug
 
-    def test_comma_parts(self):
-        """Test comma-separated parts handling."""
-        result = normalize_nndss_disease_name("hepatitis, acute")
-        assert result == "Hepatitis, Acute"
+    def test_expected_national_slugs(self):
+        """Test expected national slugs are present."""
+        assert "us-residents" in NATIONAL_SLUGS
+        assert "non-us-residents" in NATIONAL_SLUGS
+        assert "total" in NATIONAL_SLUGS
 
-    def test_nan_returns_nan(self):
-        """Test NaN values pass through."""
-        result = normalize_nndss_disease_name(pd.NA)
-        assert pd.isna(result)
-
-    def test_short_string(self):
-        """Test single character handling."""
-        assert normalize_nndss_disease_name("a") == "A"
-
-
-class TestNormalizeDiseaseName:
-    """Tests for normalize_disease_name function."""
-
-    def test_tracker_source(self):
-        """Test tracker source normalization."""
-        assert normalize_disease_name("measles", "tracker") == "Measles"
-
-    def test_nndss_source(self):
-        """Test NNDSS source normalization."""
-        assert normalize_disease_name("measles", "nndss") == "Measles"
-
-    def test_unknown_source(self):
-        """Test unknown source passes through."""
-        assert normalize_disease_name("measles", "unknown") == "measles"
-
-
-class TestApplyDiseaseAliases:
-    """Tests for apply_disease_aliases function."""
-
-    def test_applies_aliases(self):
-        """Test aliases are applied."""
-        df = pd.DataFrame({"disease_name": ["Hansen's Disease", "Measles"]})
-        result = apply_disease_aliases(df)
-        assert result["disease_name"].iloc[0] == "Leprosy (Hansen's Disease)"
-        assert result["disease_name"].iloc[1] == "Measles"
-
-    def test_preserves_unmatched(self):
-        """Test unmatched names are preserved."""
-        df = pd.DataFrame({"disease_name": ["Unknown Disease"]})
-        result = apply_disease_aliases(df)
-        assert result["disease_name"].iloc[0] == "Unknown Disease"
+    def test_expected_region_slugs(self):
+        """Test expected region slugs are present."""
+        assert "pacific" in REGION_SLUGS
+        assert "new-england" in REGION_SLUGS
+        assert "mountain" in REGION_SLUGS

@@ -38,16 +38,13 @@ function loadUSTopology() {
  * @param {string} diseaseName - Name of the disease
  * @param {Object} usTopology - Pre-loaded US TopoJSON data
  * @param {Object} options - Optional configuration {width, height, highlightedStates}
- * @returns {SVGElement} The SVG element node
+ * @returns {Object} Object with {svg: SVGElement, legendData: {colors, breaks, noDataColor}}
  */
 function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
     // TopoJSON viewport is 975x610 for Albers USA projection
     const width = options.width || 975;
     const height = options.height || 610;
     const highlightedStates = options.highlightedStates || new Set();
-    const legendWidth = 200;
-    const legendHeight = 16;
-    const legendMargin = { right: 20, bottom: 50 };
 
     // Create detached SVG with accessibility attributes
     const svg = d3.create("svg")
@@ -89,10 +86,21 @@ function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
         };
     }
 
-    // Color scale - sequential blue scale
-    const colorScale = d3.scaleSequential()
-        .domain([data.min_cases, data.max_cases])
-        .interpolator(d3.interpolateBlues);
+    // Extract non-zero case values for quantile calculation
+    const caseValues = Object.values(data.states)
+        .map(s => s.cases)
+        .filter(c => c > 0)
+        .sort((a, b) => a - b);
+
+    // 5-step blue color palette (light to dark)
+    const colorRange = ["#eff6ff", "#bfdbfe", "#60a5fa", "#2563eb", "#1e40af"];
+
+    // Color scale - quantile for even distribution across states
+    const colorScale = caseValues.length > 0
+        ? d3.scaleQuantile()
+            .domain(caseValues)
+            .range(colorRange)
+        : () => colorRange[0]; // Fallback if no data
 
     // No-data color (gray)
     const noDataColor = "#e5e7eb";
@@ -181,85 +189,23 @@ function createUSAMapChart(data, diseaseName, usTopology, options = {}) {
         .attr("stroke-linejoin", "round")
         .attr("d", path);
 
-    // Add legend
-    const legendX = width - legendWidth - legendMargin.right;
-    const legendY = height - legendHeight - legendMargin.bottom;
+    // Build legend data from quantile thresholds
+    const quantiles = caseValues.length > 0 && colorScale.quantiles
+        ? colorScale.quantiles()
+        : [];
 
-    const legend = svg.append("g")
-        .attr("transform", `translate(${legendX}, ${legendY})`);
+    let legendData = null;
+    if (quantiles.length > 0) {
+        const minVal = caseValues[0];
+        const maxVal = caseValues[caseValues.length - 1];
+        legendData = {
+            colors: colorRange,
+            breaks: [minVal, ...quantiles, maxVal],
+            noDataColor: noDataColor
+        };
+    }
 
-    // Legend gradient
-    const defs = svg.append("defs");
-    const gradientId = "usa-map-legend-gradient-" + Math.random().toString(36).substr(2, 9);
-    const gradient = defs.append("linearGradient")
-        .attr("id", gradientId)
-        .attr("x1", "0%")
-        .attr("x2", "100%")
-        .attr("y1", "0%")
-        .attr("y2", "0%");
-
-    gradient.append("stop")
-        .attr("offset", "0%")
-        .attr("stop-color", colorScale(data.min_cases));
-
-    gradient.append("stop")
-        .attr("offset", "100%")
-        .attr("stop-color", colorScale(data.max_cases));
-
-    // Legend rectangle
-    legend.append("rect")
-        .attr("width", legendWidth)
-        .attr("height", legendHeight)
-        .style("fill", `url(#${gradientId})`);
-
-    // Legend axis
-    const legendScale = d3.scaleLinear()
-        .domain([data.min_cases, data.max_cases])
-        .range([0, legendWidth]);
-
-    // Use compact format (e.g., 50K, 100K) and fewer ticks
-    const formatNumber = (d) => {
-        if (d >= 1000000) return d3.format(".1s")(d).replace("M", "M");
-        if (d >= 1000) return d3.format(".0s")(d).replace("k", "K");
-        return d3.format(",")(d);
-    };
-
-    const legendAxis = d3.axisBottom(legendScale)
-        .ticks(3)
-        .tickFormat(formatNumber);
-
-    legend.append("g")
-        .attr("transform", `translate(0, ${legendHeight})`)
-        .call(legendAxis)
-        .selectAll("text")
-        .style("font-size", "10px");
-
-    // Legend title
-    legend.append("text")
-        .attr("x", legendWidth / 2)
-        .attr("y", -6)
-        .attr("text-anchor", "middle")
-        .style("font-size", "11px")
-        .style("font-weight", "600")
-        .text("Total Cases");
-
-    // No-data legend item
-    const noDataLegend = svg.append("g")
-        .attr("transform", `translate(${legendX}, ${legendY + legendHeight + 28})`);
-
-    noDataLegend.append("rect")
-        .attr("width", 14)
-        .attr("height", 14)
-        .attr("fill", noDataColor)
-        .attr("stroke", "#ccc")
-        .attr("stroke-width", 0.5);
-
-    noDataLegend.append("text")
-        .attr("x", 20)
-        .attr("y", 11)
-        .style("font-size", "10px")
-        .text("No data");
-
-    return svg.node();
+    return { svg: svg.node(), legendData };
 }
+
 

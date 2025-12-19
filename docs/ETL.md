@@ -326,38 +326,52 @@ async def lifespan(app: FastAPI):
 **Problem**: Different naming conventions between data sources
 
 - Tracker: `"measles"` (lowercase)
-- NNDSS: `"Measles"` (title case)
+- NNDSS: `"Measles"` (title case), also encodes subtypes in labels like `"Measles, Imported"`
 
-**Solution**: Treat NNDSS (CDC) as canonical standard
+**Solution**: Treat NNDSS (CDC) as canonical standard, with transformations to extract subtypes
 
 **Benefits**:
 - ✅ Official CDC nomenclature
 - ✅ Consistent with national reporting
 - ✅ Future-proof for additional NNDSS diseases
 - ✅ Clear provenance tracking via `original_disease_name`
+- ✅ Proper subtype extraction for serogroups
 
 ### Implementation
 
-**File**: `app/disease_mappings.py`
+**File**: `app/etl/normalizers/disease_names.py`
 
 ```python
+# Tracker to NNDSS mapping
 TRACKER_TO_NNDSS = {
     "measles": "Measles",
     "meningococcus": "Meningococcal disease",
     "pertussis": "Pertussis",
 }
 
-def normalize_disease_name(tracker_name: str) -> str:
-    return TRACKER_TO_NNDSS[tracker_name.lower()]
+# NNDSS label to (disease_name, disease_subtype) transformations
+NNDSS_DISEASE_TRANSFORMS = {
+    "Measles, Imported": ("Measles", None),
+    "Measles, Indigenous": ("Measles", None),
+    "Meningococcal disease, Serogroup B": ("Meningococcal disease", "B"),
+    "Meningococcal disease, Serogroups ACWY": ("Meningococcal disease", "ACWY"),
+    "Meningococcal disease, Other serogroups": ("Meningococcal disease", "Other"),
+    "Meningococcal disease, Unknown serogroup": ("Meningococcal disease", "Unknown"),
+    "Meningococcal disease, All serogroups": ("Meningococcal disease", None),
+}
 ```
 
 **Applied During**:
-- Tracker data loading (in `load_csv_files()`)
+- Tracker data loading: `normalize_tracker_disease_name()`
+- NNDSS data loading: `normalize_nndss_disease_name()` + `transform_nndss_disease()`
 
 **Stored As**:
 - `disease_data.disease_name` → NNDSS canonical name
-- `disease_data.original_disease_name` → Original tracker name
+- `disease_data.disease_subtype` → Extracted subtype (serogroup, etc.)
+- `disease_data.original_disease_name` → Original source name
 - `disease_name_mapping` table → Persistent lookup
+
+See `/docs/data-decisions.md` for rationale on aggregation decisions.
 
 ---
 
@@ -558,6 +572,66 @@ INFO: Created disease_data table with 457067 rows
 INFO:   - tracker: 178 records, 1234 cases
 INFO:   - nndss: 456789 records, 8452687 cases
 ```
+
+---
+
+## Mixed Sources Deduplication
+
+For diseases that have data from both tracker and NNDSS sources, a merged view (`disease_data_merged`) is created to avoid double-counting when displaying combined totals.
+
+### Deduplication Logic
+
+The view applies a **filler pattern** where tracker data takes priority:
+
+1. **Aggregate to monthly state level**: All records are aggregated by (disease, state, month)
+   - Tracker county-level data → summed to state level
+   - Tracker age groups → summed to total
+   - NNDSS weekly data → summed to monthly
+
+2. **Apply source priority**: For each (disease, state, month) combination, only one source's data is kept
+   - Priority 1: Tracker data
+   - Priority 2: NNDSS data
+
+3. **Result**: A deduplicated dataset where:
+   - States with tracker data use tracker values
+   - States without tracker data use NNDSS values (gap filling)
+
+### SQL Implementation
+
+```sql
+CREATE VIEW disease_data_merged AS
+WITH monthly_aggregated AS (
+    SELECT
+        disease_name, disease_slug, state,
+        DATE_TRUNC('month', report_period_start) as month,
+        data_source, SUM(count) as count
+    FROM disease_data
+    WHERE state IS NOT NULL AND state != ''
+    GROUP BY disease_name, disease_slug, state,
+             DATE_TRUNC('month', report_period_start), data_source
+),
+ranked AS (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY disease_name, state, month
+            ORDER BY CASE WHEN data_source = 'tracker' THEN 1 ELSE 2 END
+        ) as rn
+    FROM monthly_aggregated
+)
+SELECT disease_name, disease_slug, state, month, data_source, count
+FROM ranked WHERE rn = 1
+```
+
+### Usage
+
+The merged view is used automatically when querying without a `data_source` filter:
+- Homepage disease totals
+- Disease detail page statistics
+- Choropleth map state totals
+
+When a specific `data_source` is specified (e.g., "tracker" or "nndss"), queries use the raw `disease_data` table directly.
+
+See `/docs/data-decisions.md` for the rationale behind this approach.
 
 ---
 

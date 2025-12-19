@@ -28,8 +28,9 @@ async def get_disease_cards(request: Request, data_source: str | None = None, _d
     """
     diseases_raw = await run_db_query(db.get_diseases_with_slugs, data_source)
 
-    # Get summary stats for cumulative totals (filtered by source if specified)
-    stats = await run_db_query(db.get_summary_stats, data_source)
+    # Always get merged totals (not filtered by data_source)
+    # The cumulative total should always show the full deduplicated total
+    stats = await run_db_query(db.get_summary_stats, None)
     disease_totals = {d["disease_name"]: d["total_cases"] for d in stats.get("disease_totals", [])}
 
     # Enrich diseases with total cases and data source

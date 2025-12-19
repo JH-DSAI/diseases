@@ -13,10 +13,8 @@ from pathlib import Path
 import fsspec
 import pandas as pd
 
-from app.etl.normalizers.disease_names import apply_disease_aliases
 from app.etl.schema import REQUIRED_COLUMNS, validate_dataframe
 from app.etl.storage import get_filesystem, get_storage_options, is_remote_uri
-from app.utils import to_disease_slug
 
 logger = logging.getLogger(__name__)
 
@@ -88,18 +86,16 @@ class DataSourceTransformer(ABC):
         Template method: orchestrates the full ETL pipeline.
 
         This method defines the skeleton of the ETL algorithm:
-        1. Source-specific transformation (abstract)
-        2. Apply disease name aliases (shared)
-        3. Generate URL slugs (shared)
-        4. Tag with data source (shared)
-        5. Validate schema (shared)
+        1. Source-specific transformation (abstract) - includes slugification
+        2. Tag with data source (shared)
+        3. Validate schema (shared)
 
         Returns:
             DataFrame conforming to the unified schema
         """
         logger.info(f"Loading data from {self.get_source_name()}: {self.source_uri}")
 
-        # Step 1: Source-specific loading and transformation
+        # Step 1: Source-specific loading and transformation (includes slugification)
         df = self.transform()
 
         # Handle empty DataFrames (e.g., missing data directory)
@@ -109,19 +105,13 @@ class DataSourceTransformer(ABC):
 
         logger.info(f"Transformed {len(df)} records from {self.get_source_name()}")
 
-        # Step 2: Apply disease name aliases
-        df = self._apply_disease_aliases(df)
-
-        # Step 3: Generate URL slugs
-        df = self._generate_slugs(df)
-
-        # Step 4: Tag with data source
+        # Step 2: Tag with data source
         df = self._tag_data_source(df)
 
-        # Step 5: Validate schema
+        # Step 3: Validate schema
         self._validate_schema(df)
 
-        # Step 6: Select and order columns
+        # Step 4: Select and order columns
         df = self._select_columns(df)
 
         logger.info(f"Loaded {len(df)} records from {self.get_source_name()}")
@@ -133,28 +123,27 @@ class DataSourceTransformer(ABC):
         Source-specific transformation logic.
 
         Must return a DataFrame with columns matching the unified schema.
-        The following columns are handled by the base class and should NOT
-        be set in transform():
-            - disease_slug (generated from disease_name)
+        Transformers are responsible for generating all slug columns.
+
+        The following column is handled by the base class:
             - data_source (set from get_source_name())
 
-        The following columns MUST be set:
-            - report_period_start
-            - report_period_end
-            - date_type
-            - time_unit
-            - disease_name
+        Required columns (must be set by transform()):
+            - report_period_start, report_period_end
+            - date_type, time_unit
+            - disease_name, disease_slug
+            - disease_subtype, disease_subtype_slug
+            - reporting_jurisdiction, reporting_jurisdiction_slug
+            - state, state_slug
+            - geo_name, geo_name_slug
+            - geo_unit, geo_unit_slug
+            - age_group, age_group_slug
+            - outcome, count
             - original_disease_name
-            - reporting_jurisdiction
-            - state
-            - geo_name
-            - geo_unit
-            - outcome
-            - count
 
-        Optional columns (can be None/NaN):
-            - disease_subtype
-            - age_group
+        Nullable columns (can be None/NaN):
+            - disease_subtype, disease_subtype_slug
+            - age_group, age_group_slug
             - confirmation_status
         """
         pass
@@ -171,27 +160,6 @@ class DataSourceTransformer(ABC):
             Source name (e.g., 'tracker', 'nndss')
         """
         pass
-
-    def _apply_disease_aliases(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Apply disease name aliases from centralized configuration.
-
-        This normalizes disease names across sources by mapping variant
-        names to canonical forms (e.g., "Hansen's Disease" -> "Leprosy").
-        """
-        return apply_disease_aliases(df)
-
-    def _generate_slugs(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generate URL-safe slugs for disease names.
-
-        Creates the 'disease_slug' column from 'disease_name'.
-        """
-        df = df.copy()
-        df["disease_slug"] = df["disease_name"].apply(
-            lambda x: to_disease_slug(x) if pd.notna(x) else None
-        )
-        return df
 
     def _tag_data_source(self, df: pd.DataFrame) -> pd.DataFrame:
         """
