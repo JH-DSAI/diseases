@@ -2,10 +2,7 @@
 
 import pandas as pd
 
-from app.etl.normalizers.disease_names import (
-    DISEASE_DISPLAY_NAMES,
-    get_display_name,
-)
+from app.etl.normalizers.disease_names import get_display_name
 from app.etl.normalizers.geo import (
     NATIONAL_SLUGS,
     REGION_SLUGS,

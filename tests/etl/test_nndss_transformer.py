@@ -178,8 +178,6 @@ class TestNNDSSTransformer:
         df = transformer.load()
 
         # Records from "All serogroups" should have null subtype
-        all_serogroups = df[
-            df["original_disease_name"].str.contains("All serogroups", na=False)
-        ]
+        all_serogroups = df[df["original_disease_name"].str.contains("All serogroups", na=False)]
         if len(all_serogroups) > 0:
             assert all_serogroups["disease_subtype"].isna().all()

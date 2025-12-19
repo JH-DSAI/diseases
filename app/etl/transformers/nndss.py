@@ -42,22 +42,63 @@ SUBTYPE_NORMALIZATION = {
 
 # State name to 2-letter code mapping
 STATE_CODES = {
-    "ALABAMA": "AL", "ALASKA": "AK", "ARIZONA": "AZ", "ARKANSAS": "AR",
-    "CALIFORNIA": "CA", "COLORADO": "CO", "CONNECTICUT": "CT", "DELAWARE": "DE",
-    "FLORIDA": "FL", "GEORGIA": "GA", "HAWAII": "HI", "IDAHO": "ID",
-    "ILLINOIS": "IL", "INDIANA": "IN", "IOWA": "IA", "KANSAS": "KS",
-    "KENTUCKY": "KY", "LOUISIANA": "LA", "MAINE": "ME", "MARYLAND": "MD",
-    "MASSACHUSETTS": "MA", "MICHIGAN": "MI", "MINNESOTA": "MN", "MISSISSIPPI": "MS",
-    "MISSOURI": "MO", "MONTANA": "MT", "NEBRASKA": "NE", "NEVADA": "NV",
-    "NEW HAMPSHIRE": "NH", "NEW JERSEY": "NJ", "NEW MEXICO": "NM", "NEW YORK": "NY",
-    "NEW YORK CITY": "NYC", "NORTH CAROLINA": "NC", "NORTH DAKOTA": "ND", "OHIO": "OH",
-    "OKLAHOMA": "OK", "OREGON": "OR", "PENNSYLVANIA": "PA", "RHODE ISLAND": "RI",
-    "SOUTH CAROLINA": "SC", "SOUTH DAKOTA": "SD", "TENNESSEE": "TN", "TEXAS": "TX",
-    "UTAH": "UT", "VERMONT": "VT", "VIRGINIA": "VA", "WASHINGTON": "WA",
-    "WEST VIRGINIA": "WV", "WISCONSIN": "WI", "WYOMING": "WY",
+    "ALABAMA": "AL",
+    "ALASKA": "AK",
+    "ARIZONA": "AZ",
+    "ARKANSAS": "AR",
+    "CALIFORNIA": "CA",
+    "COLORADO": "CO",
+    "CONNECTICUT": "CT",
+    "DELAWARE": "DE",
+    "FLORIDA": "FL",
+    "GEORGIA": "GA",
+    "HAWAII": "HI",
+    "IDAHO": "ID",
+    "ILLINOIS": "IL",
+    "INDIANA": "IN",
+    "IOWA": "IA",
+    "KANSAS": "KS",
+    "KENTUCKY": "KY",
+    "LOUISIANA": "LA",
+    "MAINE": "ME",
+    "MARYLAND": "MD",
+    "MASSACHUSETTS": "MA",
+    "MICHIGAN": "MI",
+    "MINNESOTA": "MN",
+    "MISSISSIPPI": "MS",
+    "MISSOURI": "MO",
+    "MONTANA": "MT",
+    "NEBRASKA": "NE",
+    "NEVADA": "NV",
+    "NEW HAMPSHIRE": "NH",
+    "NEW JERSEY": "NJ",
+    "NEW MEXICO": "NM",
+    "NEW YORK": "NY",
+    "NEW YORK CITY": "NYC",
+    "NORTH CAROLINA": "NC",
+    "NORTH DAKOTA": "ND",
+    "OHIO": "OH",
+    "OKLAHOMA": "OK",
+    "OREGON": "OR",
+    "PENNSYLVANIA": "PA",
+    "RHODE ISLAND": "RI",
+    "SOUTH CAROLINA": "SC",
+    "SOUTH DAKOTA": "SD",
+    "TENNESSEE": "TN",
+    "TEXAS": "TX",
+    "UTAH": "UT",
+    "VERMONT": "VT",
+    "VIRGINIA": "VA",
+    "WASHINGTON": "WA",
+    "WEST VIRGINIA": "WV",
+    "WISCONSIN": "WI",
+    "WYOMING": "WY",
     "DISTRICT OF COLUMBIA": "DC",
-    "AMERICAN SAMOA": "AS", "GUAM": "GU", "NORTHERN MARIANA ISLANDS": "MP",
-    "PUERTO RICO": "PR", "VIRGIN ISLANDS": "VI",
+    "AMERICAN SAMOA": "AS",
+    "GUAM": "GU",
+    "NORTHERN MARIANA ISLANDS": "MP",
+    "PUERTO RICO": "PR",
+    "VIRGIN ISLANDS": "VI",
 }
 
 logger = logging.getLogger(__name__)
@@ -337,11 +378,13 @@ class NNDSSTransformer(DataSourceTransformer):
             subtype_lower = subtype_raw.lower()
             for prefix in SUBTYPE_PREFIXES:
                 if subtype_lower.startswith(prefix):
-                    subtype_raw = subtype_raw[len(prefix):]
+                    subtype_raw = subtype_raw[len(prefix) :]
                     break
 
             # Strip "serogroup(s)" suffix ("Other serogroups" → "Other")
-            subtype_raw = re.sub(r"\s*serogroups?\s*$", "", subtype_raw, flags=re.IGNORECASE).strip()
+            subtype_raw = re.sub(
+                r"\s*serogroups?\s*$", "", subtype_raw, flags=re.IGNORECASE
+            ).strip()
 
             # Normalize to canonical values ("Other" → "unspecified")
             subtype_raw = SUBTYPE_NORMALIZATION.get(subtype_raw.lower(), subtype_raw)
