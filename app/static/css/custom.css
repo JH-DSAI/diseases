@@ -67,7 +67,7 @@
 }
 
 .disease-card-body {
-    padding: 32px;
+    padding: 28px 28px 28px 35px;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -83,7 +83,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .disease-title {
@@ -124,9 +124,10 @@
 
 /* Chart Y-axis labels */
 .chart-y-label {
-    background: hotpink;
+    background: white;
     font-size: 14px;
     font-family: 'Inter', sans-serif;
     display: inline-block;
     line-height: 20px;
+    padding-right: 5px;
 }

@@ -187,9 +187,12 @@ function createNationalTrendBarChart(data, diseaseName, options = {}) {
         .range([innerHeight, 0]);
 
     // Add Y axis gridlines first (full width)
-    const yTicks = y.ticks(5);
+    // Force exactly 5 ticks for consistent spacing across all charts
+    const maxY = y.domain()[1];
+    const yTicks = [0, 1, 2, 3, 4].map(i => Math.round(maxY * i / 4));
+    const yGridlines = yTicks.filter(t => t > 0);
     g.selectAll(".gridline")
-        .data(yTicks)
+        .data(yGridlines)
         .enter()
         .append("line")
         .attr("class", "gridline")
@@ -200,7 +203,42 @@ function createNationalTrendBarChart(data, diseaseName, options = {}) {
         .attr("stroke", "#e5e5e5")
         .attr("stroke-width", 1);
 
-    // Add Y axis labels with background (using foreignObject for CSS styling)
+    // Add bars with rounded top corners only
+    const barRadius = 2;
+    g.selectAll(".bar")
+        .data(last12Months)
+        .enter()
+        .append("path")
+        .attr("class", "bar")
+        .attr("d", d => {
+            const bx = x(d.period);
+            const by = y(d.cases);
+            const bw = x.bandwidth();
+            const bh = innerHeight - y(d.cases);
+            const r = Math.min(barRadius, bw / 2, bh);
+            if (bh <= 0) return '';
+            // Path with rounded top corners, square bottom corners
+            return `M${bx},${by + r}
+                    Q${bx},${by} ${bx + r},${by}
+                    L${bx + bw - r},${by}
+                    Q${bx + bw},${by} ${bx + bw},${by + r}
+                    L${bx + bw},${by + bh}
+                    L${bx},${by + bh}
+                    Z`;
+        })
+        .attr("fill", color);
+
+    // Add black baseline at y=0 (x-axis) - drawn after bars so it appears on top
+    g.append("line")
+        .attr("class", "baseline")
+        .attr("x1", -margin.left)
+        .attr("x2", innerWidth)
+        .attr("y1", y(0))
+        .attr("y2", y(0))
+        .attr("stroke", "black")
+        .attr("stroke-width", 1);
+
+    // Add Y axis labels with background (drawn last so they appear on top)
     yTicks.forEach(tick => {
         const yPos = y(tick);
         const labelText = tick.toLocaleString();
@@ -214,20 +252,6 @@ function createNationalTrendBarChart(data, diseaseName, options = {}) {
             .attr("class", "chart-y-label")
             .text(labelText);
     });
-
-    // Add bars
-    g.selectAll(".bar")
-        .data(last12Months)
-        .enter()
-        .append("rect")
-        .attr("class", "bar")
-        .attr("x", d => x(d.period))
-        .attr("y", d => y(d.cases))
-        .attr("width", x.bandwidth())
-        .attr("height", d => innerHeight - y(d.cases))
-        .attr("fill", color)
-        .attr("rx", 2)
-        .attr("ry", 2);
 
     // Add tooltip behavior using title elements
     g.selectAll(".bar")
