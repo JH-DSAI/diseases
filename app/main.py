@@ -1,6 +1,7 @@
 """FastAPI main application entry point"""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,6 +13,26 @@ from app.config import settings
 from app.database import db
 from app.middleware import BasicAuthMiddleware
 from app.routers import api, html_api, pages, sql_api
+from app.templates import templates
+
+# Static directory path (used for hot reload and static file mounting)
+static_dir = Path(__file__).parent / "static"
+templates_dir = Path(__file__).parent / "templates"
+
+# Hot reload setup (created early so lifespan can start/stop it)
+hot_reload = None
+if os.getenv("APP_ENV") == "development":
+    import arel
+
+    # Suppress noisy watchfiles debug logs
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+
+    hot_reload = arel.HotReload(
+        paths=[
+            arel.Path(str(static_dir)),
+            arel.Path(str(templates_dir)),
+        ]
+    )
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -48,6 +69,11 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
 
+    # Start hot reload watcher (dev mode only)
+    if hot_reload:
+        await hot_reload.startup()
+        logger.info("Hot reload enabled for development")
+
     # Initialize database and load data
     try:
         db.connect()
@@ -72,6 +98,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down application")
+    if hot_reload:
+        await hot_reload.shutdown()
     db.close()
 
 
@@ -92,7 +120,6 @@ if settings.staging_auth_enabled:
     logger.info("Staging authentication enabled")
 
 # Mount static files
-static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Include routers
@@ -100,6 +127,13 @@ app.include_router(api.router)
 app.include_router(html_api.router)
 app.include_router(sql_api.router)
 app.include_router(pages.router)
+
+# Register hot reload WebSocket route (dev mode only)
+if hot_reload:
+    app.add_websocket_route("/hot-reload", route=hot_reload, name="hot-reload")
+
+# Make hot_reload available in all templates
+templates.env.globals["hot_reload"] = hot_reload
 
 
 @app.get("/health")

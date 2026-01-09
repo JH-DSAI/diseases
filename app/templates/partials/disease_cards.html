@@ -4,3 +4,37 @@
     {% include "partials/disease_card.html" %}
     {% endfor %}
 </div>
+
+<script>
+function diseaseCard(slug, name) {
+    return {
+        color: getDiseaseColor(slug),
+        startDate: '',
+        endDate: '',
+        totalFormatted: '',
+        async load() {
+            try {
+                const res = await fetch(`/api/data/timeseries/national/${slug}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const result = createNationalTrendBarChart(data.data || [], name, {
+                    color: this.color
+                });
+                this.$refs.chart.replaceChildren(result.svg);
+                this.startDate = result.startDate || '';
+                this.endDate = result.endDate || '';
+                this.totalFormatted = result.total ? result.total.toLocaleString() : '0';
+            } catch (err) {
+                console.error(`Failed to fetch timeseries for ${slug}:`, err);
+                const result = createNationalTrendBarChart([], name, {
+                    color: this.color
+                });
+                this.$refs.chart.replaceChildren(result.svg);
+                this.startDate = '';
+                this.endDate = '';
+                this.totalFormatted = '0';
+            }
+        }
+    }
+}
+</script>

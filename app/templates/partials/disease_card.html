@@ -1,54 +1,45 @@
-{# Single disease card with mini chart #}
+{# Single disease card with mini bar chart #}
 <a href="/disease/{{ disease.slug }}"
-   class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow cursor-pointer">
-    <div class="card-body">
-        <div class="flex items-center justify-between">
-            <h3 class="card-title capitalize">{{ disease.name }}</h3>
-            {% if disease.data_source %}
-            <div class="flex gap-1">
-                {% for source in disease.data_source.split(',') %}
-                <span class="badge badge-sm {% if source == 'nndss' %}badge-primary{% else %}badge-secondary{% endif %}">
-                    {{ source.upper() }}
-                </span>
-                {% endfor %}
-            </div>
-            {% endif %}
+   class="disease-card block"
+   x-data="diseaseCard('{{ disease.slug }}', '{{ disease.name }}')"
+   x-init="load()">
+    <div class="disease-card-body">
+        {# Title section #}
+        <div class="disease-card-header">
+            <h3 class="disease-title" x-bind:style="'color: ' + color">{{ disease.name | title }}</h3>
+            <p class="disease-subtitle">Monthly Cases</p>
         </div>
-        <div x-data="diseaseCard('{{ disease.slug }}', '{{ disease.name }}')" x-init="load()">
-            <div x-ref="chart" class="w-full" style="min-height: 205px;">
-                <div class="flex items-center justify-center h-48">
-                    <span class="loading loading-spinner loading-md"></span>
+
+        {# Chart container #}
+        <div x-ref="chart" class="disease-chart">
+            <div class="flex items-center justify-center h-48">
+                <span class="loading loading-spinner loading-md"></span>
+            </div>
+        </div>
+
+        {# Date range and 12-month total - padding matches SVG margin ratio (45/420 ≈ 10.7%) #}
+        <div class="flex flex-col gap-[4px] items-center w-full disease-date-and-total" style="padding-left: 10.7%; padding-right: 2.4%">
+            {# Date Range row #}
+            <div class="flex gap-[12px] items-center w-full">
+                <p class="font-normal text-[14px] text-black text-nowrap" x-text="startDate"></p>
+                <div class="grow h-0 relative">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-black"></div>
+                    </div>
+                    <div class="absolute right-0 top-1/2 -translate-y-1/2 border-t-[4px] border-b-[4px] border-l-[6px] border-transparent border-l-black"></div>
                 </div>
+                <p class="font-normal text-[14px] text-black text-nowrap text-right" x-text="endDate"></p>
             </div>
-        </div>
-        <div class="mt-4 text-center">
-            <div class="text-sm text-base-content/70">Cumulative Total</div>
-            <div class="text-2xl font-bold text-primary">
-                {% if disease.total_cases is not none %}
-                    {{ "{:,}".format(disease.total_cases) }}
-                {% else %}
-                    -
-                {% endif %}
+            {# 12-month total #}
+            <div class="flex flex-col items-center text-center w-full" x-bind:style="'color: ' + color">
+                <p class="font-normal text-[16px]">12-month total</p>
+                <p class="font-bold text-[30px]" x-text="totalFormatted"></p>
             </div>
         </div>
     </div>
+
+    {# Click to explore banner #}
+    <div class="disease-card-banner" x-bind:style="'background-color: ' + color">
+        Click to explore &rarr;
+    </div>
 </a>
-<script>
-function diseaseCard(slug, name) {
-    return {
-        async load() {
-            try {
-                const res = await fetch(`/api/data/timeseries/national/${slug}`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const svg = createNationalTrendChart(data.data || [], name);
-                this.$refs.chart.replaceChildren(svg);
-            } catch (err) {
-                console.error(`Failed to fetch timeseries for ${slug}:`, err);
-                const svg = createNationalTrendChart([], name);
-                this.$refs.chart.replaceChildren(svg);
-            }
-        }
-    }
-}
-</script>

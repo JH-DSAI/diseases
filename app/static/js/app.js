@@ -1,6 +1,27 @@
 // Disease Dashboard - Custom JavaScript
 
 /**
+ * Disease color configuration
+ * Maps disease slugs to their accent colors from the design system
+ */
+const DISEASE_COLORS = {
+    'measles': '#13A3D3',
+    'meningococcal-disease': '#4625DA',
+    'meningococcus': '#4625DA',
+    'pertussis': '#9225DA',
+    'default': '#3b82f6'
+};
+
+/**
+ * Get the accent color for a disease
+ * @param {string} slug - Disease slug
+ * @returns {string} Hex color code
+ */
+function getDiseaseColor(slug) {
+    return DISEASE_COLORS[slug] || DISEASE_COLORS['default'];
+}
+
+/**
  * Persistent query params manager.
  * Stores specified URL params in sessionStorage and applies them to navigation links.
  */

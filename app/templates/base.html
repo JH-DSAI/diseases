@@ -88,5 +88,9 @@
     <script src="/static/js/app.js"></script>
 
     {% block extra_scripts %}{% endblock %}
+
+    {% if hot_reload %}
+    {{ hot_reload.script(url_for('hot-reload')) | safe }}
+    {% endif %}
 </body>
 </html>

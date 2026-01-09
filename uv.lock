@@ -180,6 +180,19 @@ wheels = [
 ]
 
 [[package]]
+name = "arel"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "starlette" },
+    { name = "watchfiles" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/46/a1a8634e7e6b8f0cd86021cc428127671c71457dc051da703b55ea8d90ec/arel-0.4.0.tar.gz", hash = "sha256:08b2f72f767a84825a649891eb30f20f89c0de6aa67134939691ee0012aafc73", size = 14065 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/a3/a70c2c3bcb50254522f997298f90a44ba698a60a47efb40d9cceab31a4f5/arel-0.4.0-py3-none-any.whl", hash = "sha256:7b1fe5d10c06a6f231cfeec79e48888176931b86f0ae6e432196845edf818109", size = 8263 },
+]
+
+[[package]]
 name = "attrs"
 version = "25.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -579,6 +592,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "adlfs" },
+    { name = "arel" },
     { name = "duckdb" },
     { name = "fastapi", extra = ["standard"] },
     { name = "fsspec" },
@@ -601,6 +615,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "adlfs", specifier = ">=2024.4.0" },
+    { name = "arel", specifier = ">=0.4.0" },
     { name = "duckdb", specifier = ">=1.1.3" },
     { name = "fastapi", extras = ["standard"], specifier = "==0.121.0" },
     { name = "fsspec", specifier = ">=2024.2.0" },

@@ -121,3 +121,129 @@ function createNationalTrendChart(data, diseaseName, options = {}) {
 
     return svg.node();
 }
+
+/**
+ * Create a bar chart showing national disease trends (monthly cases)
+ * @param {Array} data - Array of {period, total_cases} objects
+ * @param {string} diseaseName - Name of the disease
+ * @param {Object} options - Optional configuration {width, height, color}
+ * @returns {Object} { svg: SVGElement, total: number, startDate: string, endDate: string }
+ */
+function createNationalTrendBarChart(data, diseaseName, options = {}) {
+    const width = options.width || 420;
+    const height = options.height || 200;
+    const color = options.color || '#3b82f6';
+    const margin = { top: 10, right: 10, bottom: 7, left: 45 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    // Create detached SVG with accessibility attributes
+    const svg = d3.create("svg")
+        .attr("viewBox", `0 0 ${width} ${height}`)
+        .attr("preserveAspectRatio", "xMidYMid meet")
+        .attr("role", "img")
+        .attr("aria-label", `Monthly cases bar chart for ${diseaseName}`)
+        .style("width", "100%")
+        .style("height", "auto");
+
+    // Validate data
+    if (!data || !Array.isArray(data) || data.length === 0) {
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", height / 2)
+            .attr("text-anchor", "middle")
+            .style("font-size", "14px")
+            .style("fill", "#666")
+            .text("No data available");
+        return { svg: svg.node(), total: 0, startDate: null, endDate: null };
+    }
+
+    const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Parse dates and sort data
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    const chartData = data.map(d => ({
+        date: parseDate(d.period),
+        cases: +d.total_cases,
+        period: d.period
+    })).filter(d => d.date !== null)
+      .sort((a, b) => a.date - b.date);
+
+    // Take only the last 12 months of data
+    const last12Months = chartData.slice(-12);
+
+    // X scale (band scale for bars)
+    const x = d3.scaleBand()
+        .domain(last12Months.map(d => d.period))
+        .range([0, innerWidth])
+        .padding(0.1);
+
+    // Y scale
+    const maxCases = d3.max(last12Months, d => d.cases) || 100;
+    const y = d3.scaleLinear()
+        .domain([0, maxCases])
+        .nice()
+        .range([innerHeight, 0]);
+
+    // Add Y axis gridlines first (full width)
+    const yTicks = y.ticks(5);
+    g.selectAll(".gridline")
+        .data(yTicks)
+        .enter()
+        .append("line")
+        .attr("class", "gridline")
+        .attr("x1", -margin.left)
+        .attr("x2", innerWidth)
+        .attr("y1", d => y(d))
+        .attr("y2", d => y(d))
+        .attr("stroke", "#e5e5e5")
+        .attr("stroke-width", 1);
+
+    // Add Y axis labels with background (using foreignObject for CSS styling)
+    yTicks.forEach(tick => {
+        const yPos = y(tick);
+        const labelText = tick.toLocaleString();
+
+        g.append("foreignObject")
+            .attr("x", -margin.left)
+            .attr("y", yPos - 10)
+            .attr("width", margin.left)
+            .attr("height", 20)
+            .append("xhtml:span")
+            .attr("class", "chart-y-label")
+            .text(labelText);
+    });
+
+    // Add bars
+    g.selectAll(".bar")
+        .data(last12Months)
+        .enter()
+        .append("rect")
+        .attr("class", "bar")
+        .attr("x", d => x(d.period))
+        .attr("y", d => y(d.cases))
+        .attr("width", x.bandwidth())
+        .attr("height", d => innerHeight - y(d.cases))
+        .attr("fill", color)
+        .attr("rx", 2)
+        .attr("ry", 2);
+
+    // Add tooltip behavior using title elements
+    g.selectAll(".bar")
+        .append("title")
+        .text(d => `${d3.timeFormat("%B %Y")(d.date)}: ${d.cases.toLocaleString()} cases`);
+
+    // Calculate metadata for HTML rendering
+    const formatDate = d3.timeFormat("%B %Y");
+    const firstDate = last12Months.length > 0 ? last12Months[0].date : null;
+    const lastDate = last12Months.length > 0 ? last12Months[last12Months.length - 1].date : null;
+    const totalCases = last12Months.reduce((sum, d) => sum + d.cases, 0);
+
+    return {
+        svg: svg.node(),
+        total: totalCases,
+        startDate: firstDate ? formatDate(firstDate) : null,
+        endDate: lastDate ? formatDate(lastDate) : null
+    };
+}
