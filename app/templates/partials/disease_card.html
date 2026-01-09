@@ -18,7 +18,7 @@
         </div>
 
         {# Date range and 12-month total - padding aligns with bar edges (margin + band outer padding) #}
-        <div class="flex flex-col gap-[4px] items-center w-full disease-date-and-total" style="padding-left: 11.4%; padding-right: 2.80%">
+        <div class="flex flex-col items-center w-full disease-date-and-total" style="padding-left: 11.4%; padding-right: 2.80%">
             {# Date Range row #}
             <div class="flex gap-[12px] items-center w-full">
                 <p class="font-normal text-[14px] text-black text-nowrap" x-text="startDate"></p>
@@ -36,7 +36,8 @@
     </div>
 
     {# Click to explore banner #}
-    <div class="disease-card-banner" x-bind:style="'background-color: ' + color">
-        Click to explore &rarr;
+    <div class="disease-card-banner flex items-center gap-2" x-bind:style="'background-color: ' + color">
+        <span>Click to explore</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.44174 12.5035L5.01823 11.077L8.75505 7.29989H0V5.20357H8.75505L5.01823 1.43268L6.44174 0L12.6272 6.25173L6.44174 12.5035Z" fill="white"/></svg>
     </div>
 </a>
