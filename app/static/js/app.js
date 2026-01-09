@@ -1,6 +1,27 @@
 // Disease Dashboard - Custom JavaScript
 
 /**
+ * Disease color configuration
+ * Maps disease slugs to their accent colors from the design system
+ */
+const DISEASE_COLORS = {
+    'measles': '#13A3D3',
+    'meningococcal-disease': '#4625DA',
+    'meningococcus': '#4625DA',
+    'pertussis': '#9225DA',
+    'default': '#3b82f6'
+};
+
+/**
+ * Get the accent color for a disease
+ * @param {string} slug - Disease slug
+ * @returns {string} Hex color code
+ */
+function getDiseaseColor(slug) {
+    return DISEASE_COLORS[slug] || DISEASE_COLORS['default'];
+}
+
+/**
  * Persistent query params manager.
  * Stores specified URL params in sessionStorage and applies them to navigation links.
  */
@@ -51,13 +72,22 @@ class PersistedParams {
     }
 
     // Sync from current URL - saves persisted keys from URL to storage
+    // Only persists data_source when explicitly set to 'all' (tracker is default)
     syncFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const isHomePage = window.location.pathname === this.homePath;
 
         this.persistedKeys.forEach(key => {
             const value = urlParams.get(key);
-            if (value) {
+            // Only persist data_source if it's 'all' (secret merged view)
+            if (key === 'data_source') {
+                if (value === 'all') {
+                    this.set(key, value);
+                } else {
+                    // Clear it - tracker is default, no need to persist
+                    this.delete(key);
+                }
+            } else if (value) {
                 this.set(key, value);
             } else if (isHomePage) {
                 // Clear param if on home page without it (user explicitly removed it)

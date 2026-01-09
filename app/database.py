@@ -6,6 +6,7 @@ transformers for each data source.
 """
 
 import logging
+import os
 import threading
 
 import duckdb
@@ -39,6 +40,19 @@ class DiseaseDatabase:
             return
 
         conn = self.connect()
+
+        # Dev mode: reuse existing data if available (skip reload for fast restarts)
+        if os.getenv("APP_ENV") == "development":
+            try:
+                count = conn.execute("SELECT COUNT(*) FROM disease_data").fetchone()[0]
+                if count > 0:
+                    # Verify merged view exists
+                    conn.execute("SELECT 1 FROM disease_data_merged LIMIT 1")
+                    logger.info(f"Dev mode: using existing database ({count:,} records)")
+                    self._initialized = True
+                    return
+            except duckdb.CatalogException:
+                logger.info("Dev mode: database incomplete, reloading...")
 
         # Create table with explicit schema to avoid type inference issues
         conn.execute("DROP TABLE IF EXISTS disease_data")

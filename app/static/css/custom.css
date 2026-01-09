@@ -48,3 +48,86 @@
 .stat-value {
     font-variant-numeric: tabular-nums;
 }
+
+/* Disease Card Styles */
+.disease-card {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    box-shadow: 3px 8px 14px rgba(0, 0, 0, 0.09);
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+    transition: box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out;
+    text-decoration: none;
+}
+
+.disease-card:hover {
+    box-shadow: 3px 12px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.disease-card-body {
+    padding: 28px 28px 28px 35px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+@media (max-width: 768px) {
+    .disease-card-body {
+        padding: 24px;
+    }
+}
+
+.disease-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 10px;
+}
+
+.disease-title {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.disease-subtitle {
+    font-size: 18px;
+    font-weight: 400;
+    font-family: 'Inter', sans-serif;
+    color: #000;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.disease-chart {
+    width: 100%;
+    min-height: 200px;
+    line-height: 0;
+}
+
+.disease-chart svg {
+    display: block;
+}
+
+.disease-card-banner {
+    padding: 8px 10px 10px 32px;
+    border-radius: 0 0 10px 10px;
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Chart Y-axis labels */
+.chart-y-label {
+    background: white;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    display: inline-block;
+    line-height: 20px;
+    padding-right: 5px;
+}

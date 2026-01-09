@@ -1,5 +1,10 @@
 # Disease Dashboard - Just Commands
 
+# Force reload database (clears existing data)
+db-reset:
+    rm -f disease_dashboard.duckdb
+    @echo "Database cleared. Run 'just dev' to reload data."
+
 # Run development server (builds assets first, uses local data)
 dev:
     uv sync --extra dev

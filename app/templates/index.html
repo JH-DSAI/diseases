@@ -16,42 +16,23 @@
 <div class="mb-8">
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-3xl font-bold">Tracked Diseases</h2>
-        <!-- Data source filter -->
-        <div class="filter" id="source-filter">
-            <input class="btn filter-reset" type="radio" name="data-source" aria-label="All"
-                   hx-get="/api/html/diseases"
-                   hx-target="#disease-cards"
-                   hx-swap="innerHTML"
-                   hx-push-url="/"
-                   {{ 'checked' if not data_source_filter else '' }} />
-            <input class="btn" type="radio" name="data-source" aria-label="NNDSS"
-                   hx-get="/api/html/diseases?data_source=nndss"
-                   hx-target="#disease-cards"
-                   hx-swap="innerHTML"
-                   hx-push-url="/?data_source=nndss"
-                   {{ 'checked' if data_source_filter == 'nndss' else '' }} />
-            <input class="btn" type="radio" name="data-source" aria-label="TRACKER"
-                   hx-get="/api/html/diseases?data_source=tracker"
-                   hx-target="#disease-cards"
-                   hx-swap="innerHTML"
-                   hx-push-url="/?data_source=tracker"
-                   {{ 'checked' if data_source_filter == 'tracker' else '' }} />
-        </div>
     </div>
     <!-- HTMX loads disease cards from /api/html/diseases -->
+    <!-- Default: tracker data. Use ?data_source=all for merged data -->
     <div id="disease-cards"
-         hx-get="/api/html/diseases{% if data_source_filter %}?data_source={{ data_source_filter }}{% endif %}"
+         hx-get="/api/html/diseases?data_source={{ data_source_filter or 'tracker' }}"
          hx-trigger="load"
          hx-swap="innerHTML">
         <!-- Loading skeleton -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {% for _ in range(6) %}
-            <div class="card bg-base-100 shadow-xl">
-                <div class="card-body">
-                    <div class="skeleton h-6 w-32 mb-4"></div>
-                    <div class="skeleton h-48 w-full"></div>
-                    <div class="skeleton h-8 w-24 mx-auto mt-4"></div>
+            {% for _ in range(3) %}
+            <div class="disease-card">
+                <div class="disease-card-body">
+                    <div class="skeleton h-7 w-32 mb-1"></div>
+                    <div class="skeleton h-5 w-24 mb-3"></div>
+                    <div class="skeleton h-60 w-full"></div>
                 </div>
+                <div class="skeleton h-10 w-full rounded-b-lg"></div>
             </div>
             {% endfor %}
         </div>
@@ -71,5 +52,4 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/national-disease-trend-chart.js"></script>
 {% endblock %}
