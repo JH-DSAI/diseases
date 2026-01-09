@@ -78,3 +78,12 @@ ci:
 # Format code
 fmt:
     uv run ruff format .
+
+# Deploy latest main to Azure Container Apps
+send-it:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git fetch origin main
+    SHA=$(git log origin/main -1 --format='%H')
+    echo "Deploying commit: $SHA"
+    az containerapp update --name disease-dashboard --resource-group USDT_web_app_2 --image "ghcr.io/jh-dsai/diseases:$SHA"
