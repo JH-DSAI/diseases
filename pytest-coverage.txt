@@ -28,7 +28,7 @@ _______________ coverage: platform linux, python 3.11.14-final-0 _______________
 
 Name                              Stmts   Miss  Cover   Missing
 ---------------------------------------------------------------
-app/database.py                     320     96    70%   38-39, 107, 112, 116-117, 126-127, 139-140, 306, 385, 450, 608-609, 612-613, 685, 790-841, 875-957, 979-999
+app/database.py                     331    105    68%   39-40, 46-55, 121, 126, 130-131, 140-141, 153-154, 320, 399, 464, 622-623, 626-627, 699, 804-855, 889-971, 993-1013
 app/dependencies.py                  16      1    94%   23
 app/etl/base.py                      65     12    82%   69-71, 77-82, 149, 162, 181-184
 app/etl/config.py                    13      1    92%   14
@@ -37,17 +37,17 @@ app/etl/schema.py                    20      1    95%   12
 app/etl/storage.py                   33     18    45%   27-32, 59-79, 85
 app/etl/transformers/nndss.py       160     11    93%   141, 196-197, 203-204, 263, 268, 296-298, 361
 app/etl/transformers/tracker.py     116     14    88%   69-70, 83-84, 98-99, 102-103, 153, 155, 203-204, 224, 237
-app/main.py                          52     19    63%   25, 28, 49-75, 91-92
+app/main.py                          68     28    59%   25-30, 46, 49, 70-103, 119-120, 133
 app/middleware/auth.py               53      1    98%   105
 app/routers/api.py                   90     28    69%   64-66, 83-85, 117-119, 161-163, 192-194, 243-245, 267-294
-app/routers/html_api.py              55     14    75%   124-127, 145-156, 174-178, 206-211
+app/routers/html_api.py              56     14    75%   127-130, 148-159, 177-181, 209-214
 app/routers/pages.py                 29      9    69%   106-126
 app/routers/sql_api.py               58     31    47%   60-76, 82-84, 107-122, 145-158
 app/utils.py                         10     10     0%   3-41
 ---------------------------------------------------------------
-TOTAL                              1242    272    78%
+TOTAL                              1270    290    77%
 
 12 files skipped due to complete coverage.
 Coverage HTML written to dir htmlcov
-Required test coverage of 70% reached. Total coverage: 78.10%
-============================= 207 passed in 3.28s ==============================
+Required test coverage of 70% reached. Total coverage: 77.17%
+============================= 207 passed in 3.03s ==============================
