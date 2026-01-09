@@ -24,9 +24,12 @@ async def get_disease_cards(request: Request, data_source: str | None = None, _d
     Used by HTMX to populate the landing page grid.
 
     Args:
-        data_source: Optional filter for data source (e.g., 'nndss', 'tracker')
+        data_source: Filter for data source. Defaults to 'tracker'.
+                     Use 'all' to show merged data from all sources.
     """
-    diseases_raw = await run_db_query(db.get_diseases_with_slugs, data_source)
+    # Default to tracker data, use 'all' for merged view (secret param)
+    effective_source = None if data_source == "all" else (data_source or "tracker")
+    diseases_raw = await run_db_query(db.get_diseases_with_slugs, effective_source)
 
     # Always get merged totals (not filtered by data_source)
     # The cumulative total should always show the full deduplicated total

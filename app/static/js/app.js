@@ -72,13 +72,22 @@ class PersistedParams {
     }
 
     // Sync from current URL - saves persisted keys from URL to storage
+    // Only persists data_source when explicitly set to 'all' (tracker is default)
     syncFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const isHomePage = window.location.pathname === this.homePath;
 
         this.persistedKeys.forEach(key => {
             const value = urlParams.get(key);
-            if (value) {
+            // Only persist data_source if it's 'all' (secret merged view)
+            if (key === 'data_source') {
+                if (value === 'all') {
+                    this.set(key, value);
+                } else {
+                    // Clear it - tracker is default, no need to persist
+                    this.delete(key);
+                }
+            } else if (value) {
                 this.set(key, value);
             } else if (isHomePage) {
                 // Clear param if on home page without it (user explicitly removed it)
